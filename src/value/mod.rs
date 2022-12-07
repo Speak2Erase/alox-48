@@ -17,31 +17,32 @@
 
 mod de;
 
-use indexmap::IndexMap;
-use serde::Deserialize;
+use std::hash::Hash;
 
-#[derive(Default, Debug, Clone, enum_as_inner::EnumAsInner, Deserialize)]
+use indexmap::IndexMap;
+#[derive(Default, Debug, Clone, enum_as_inner::EnumAsInner)]
 pub enum Value {
     #[default]
     Nil,
-    Array(RbArray),
     Bool(bool),
     Float(f64),
     Integer(i128),
     String(String),
-    // Hash(RbHash),
+    Array(RbArray),
+    Hash(RbHash),
+    Userdata(Vec<u8>),
 }
 
-#[derive(Debug, Clone)]
-pub struct RbObject {
-    pub class: String,
-    pub members: RbHash,
+impl PartialEq for Value {
+    fn eq(&self, other: &Self) -> bool {
+        false
+    }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RbUserData {
-    pub class: String,
-    pub data: Vec<u8>,
+impl Eq for Value {}
+
+impl Hash for Value {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {}
 }
 
 pub type RbArray = Vec<Value>;

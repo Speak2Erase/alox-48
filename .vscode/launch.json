@@ -59,5 +59,23 @@
             "args": [],
             "cwd": "${workspaceFolder}"
         },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'value'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=value",
+                    "--package=alox-48"
+                ],
+                "filter": {
+                    "name": "value",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
     ]
 }

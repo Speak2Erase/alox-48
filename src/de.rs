@@ -290,7 +290,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
             }
             b'o' => {
                 self.read()?;
-                let _class = self.parse_sym()?;
+                let class = self.parse_sym()?;
 
                 let length = self.read_int::<usize>()?;
 
@@ -303,7 +303,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     serde::forward_to_deserialize_any! {
         bool char str string
         bytes byte_buf newtype_struct seq tuple
-        tuple_struct map identifier ignored_any
+        tuple_struct enum map identifier ignored_any
     }
 
     fn deserialize_i8<V>(self, visitor: V) -> Result<V::Value, Self::Error>
@@ -459,22 +459,6 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
 
         visitor.visit_map(ClassSeq::new(self, length))
     }
-
-    fn deserialize_enum<V>(
-        self,
-        name: &'static str,
-        variants: &'static [&'static str],
-        visitor: V,
-    ) -> Result<V::Value, Self::Error>
-    where
-        V: de::Visitor<'de>,
-    {
-        visitor.visit_enum(ValueAccess)
-    }
-
-    fn is_human_readable(&self) -> bool {
-        false
-    }
 }
 
 struct ArraySeq<'a, 'de> {
@@ -545,6 +529,7 @@ impl<'a, 'de> ClassSeq<'a, 'de> {
         Self {
             length,
             index: 0,
+
             de,
         }
     }
@@ -577,59 +562,5 @@ impl<'a, 'de> de::MapAccess<'de> for ClassSeq<'a, 'de> {
         V: de::DeserializeSeed<'de>,
     {
         seed.deserialize(&mut *self.de)
-    }
-}
-
-struct ValueAccess;
-
-impl<'de> de::EnumAccess<'de> for ValueAccess {
-    type Error = Error;
-    type Variant = Self;
-
-    fn variant<V>(self) -> Result<(V, Self::Variant), Self::Error>
-    where
-        V: serde::Deserialize<'de>,
-    {
-        todo!()
-    }
-
-    fn variant_seed<V>(self, seed: V) -> Result<(V::Value, Self::Variant), Self::Error>
-    where
-        V: de::DeserializeSeed<'de>,
-    {
-        todo!()
-    }
-}
-
-impl<'de> de::VariantAccess<'de> for ValueAccess {
-    type Error = Error;
-
-    fn unit_variant(self) -> Result<(), Self::Error> {
-        todo!()
-    }
-
-    fn newtype_variant_seed<T>(self, seed: T) -> Result<T::Value, Self::Error>
-    where
-        T: de::DeserializeSeed<'de>,
-    {
-        todo!()
-    }
-
-    fn tuple_variant<V>(self, len: usize, visitor: V) -> Result<V::Value, Self::Error>
-    where
-        V: de::Visitor<'de>,
-    {
-        todo!()
-    }
-
-    fn struct_variant<V>(
-        self,
-        fields: &'static [&'static str],
-        visitor: V,
-    ) -> Result<V::Value, Self::Error>
-    where
-        V: de::Visitor<'de>,
-    {
-        todo!()
     }
 }

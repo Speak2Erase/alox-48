@@ -6,7 +6,7 @@ pub mod rpg {
     use serde::{Deserialize, Serialize};
     use std::collections::HashMap;
 
-    #[derive(Debug, Deserialize, Serialize)]
+    #[derive(Debug, Deserialize)]
     pub struct Map {
         pub tileset_id: i32,
         pub width: usize,
@@ -31,9 +31,8 @@ pub mod rpg {
         }
     }
 
-    // FIXME: Use something else instead of modules to group structs like this.
     pub mod event {
-        use serde::{Deserialize, Serialize};
+        use serde::Deserialize;
         mod page {
             use serde::{Deserialize, Serialize};
 
@@ -63,7 +62,7 @@ pub mod rpg {
                 pub blend_type: i32,
             }
 
-            #[derive(Debug, Deserialize, Serialize)]
+            #[derive(Debug, Deserialize)]
             pub struct Page {
                 pub condition: Condition,
                 pub graphic: Graphic,
@@ -81,7 +80,7 @@ pub mod rpg {
             }
         }
 
-        #[derive(Debug, Deserialize, Serialize)]
+        #[derive(Debug, Deserialize)]
         pub struct Event {
             pub id: usize,
             pub name: String,
@@ -91,7 +90,7 @@ pub mod rpg {
         }
     }
 
-    #[derive(Debug, Deserialize, Serialize)]
+    #[derive(Debug, Deserialize)]
     pub struct MoveRoute {
         pub repeat: bool,
         pub skippable: bool,
@@ -105,36 +104,18 @@ pub mod rpg {
         pub pitch: u8,
     }
 
-    #[derive(Debug, Deserialize, Serialize)]
+    #[derive(Debug, Deserialize)]
     #[allow(missing_docs)]
     pub struct EventCommand {
         pub code: i32,
         pub indent: usize,
-        #[serde(skip)]
-        pub parameters: Vec<ParameterType>,
+        pub parameters: Vec<alox_48::Value>,
     }
 
-    #[derive(Debug, Deserialize, Serialize)]
+    #[derive(Debug, Deserialize)]
     #[allow(missing_docs)]
     pub struct MoveCommand {
         pub code: i32,
-        #[serde(skip)]
-        pub parameters: Vec<ParameterType>,
-    }
-
-    #[derive(Debug, Deserialize, Serialize)]
-    #[allow(missing_docs)]
-    pub enum ParameterType {
-        Integer(i32),
-        String(String),
-        Color(Vec<u8>),
-        Tone(Vec<u8>),
-        AudioFile(AudioFile),
-        Float(f32),
-        MoveRoute(MoveRoute),
-        MoveCommand(MoveCommand),
-        Array(Vec<String>),
-        TrueClass(bool),
-        FalseClass(bool),
+        pub parameters: Vec<alox_48::Value>,
     }
 }

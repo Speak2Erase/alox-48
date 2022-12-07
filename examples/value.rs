@@ -8,7 +8,23 @@ fn main() {
         .arg("-e")
         .arg(
             r#"
-            puts Marshal.dump([true, false, 15, 20.0])
+class MyClass
+    def initialize()
+        @test = Test.new
+        @bool = true
+    end
+end
+
+class Test
+    def initialize()
+        @map = {
+            "@test" => true
+        }
+    end
+end
+
+klass = MyClass.new
+puts Marshal.dump(klass)
         "#,
         )
         .output()
@@ -23,7 +39,7 @@ fn main() {
 
     println!("{}", pretty_hex::pretty_hex(&data));
 
-    let other: alox_48::Value = alox_48::from_bytes(&data).unwrap();
+    let result: Result<alox_48::Value, _> = alox_48::from_bytes(&data);
 
-    println!("{:?}", other);
+    println!("{:#?}", result)
 }
