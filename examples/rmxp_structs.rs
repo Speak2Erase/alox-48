@@ -1,7 +1,5 @@
 #![allow(dead_code, missing_docs)]
 
-// FIXME: i32 is too big for most values.
-// We should use u16 or u8 for most things.
 pub mod rpg {
     use serde::{Deserialize, Serialize};
     use std::collections::HashMap;
