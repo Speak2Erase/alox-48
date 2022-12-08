@@ -16,6 +16,8 @@
 // along with alox-48.  If not, see <http://www.gnu.org/licenses/>.
 #![allow(dead_code, unused_variables)]
 
+use std::borrow::Cow;
+
 use serde::de;
 
 type Error = crate::Error;
@@ -38,7 +40,7 @@ pub struct Deserializer<'de> {
 
 #[derive(Debug, enum_as_inner::EnumAsInner)]
 enum StringType<'de> {
-    String(&'de str),
+    String(Cow<'de, str>),
     Bytes(&'de [u8]),
 }
 
@@ -119,7 +121,7 @@ impl<'de> Deserializer<'de> {
         let bytes = self.read_len_bytes()?;
 
         let str = std::str::from_utf8(bytes)
-            .map(StringType::String)
+            .map(|s| StringType::String(s.into()))
             .unwrap_or_else(|_| StringType::Bytes(bytes));
 
         Ok(str)
@@ -136,7 +138,7 @@ impl<'de> Deserializer<'de> {
 
     fn parse_float(&mut self) -> Result<f64, Error> {
         let res = match self.read()? {
-            b'f' => match self.read_string()?.into_string().unwrap() {
+            b'f' => match self.read_string()?.into_string().unwrap().as_ref() {
                 "inf" => f64::INFINITY,
                 "-inf" => f64::NEG_INFINITY,
                 "nan" => f64::NAN,
@@ -153,7 +155,13 @@ impl<'de> Deserializer<'de> {
     fn parse_sym(&mut self) -> Result<&'de str, Error> {
         match self.read()? {
             b':' => {
-                let mut str = self.read_string()?.into_string().unwrap();
+                let str = self.read_string()?.into_string().unwrap();
+
+                let mut str = match str {
+                    Cow::Borrowed(str) => str,
+                    Cow::Owned(_) => unreachable!(),
+                };
+
                 if self.remove_ivar_prefix {
                     str = &str[1..];
                 }
@@ -194,16 +202,32 @@ impl<'de> Deserializer<'de> {
         match self.read()? {
             b'T' => {
                 let str = std::str::from_utf8(bytes)
-                    .map(StringType::String)
+                    .map(|s| StringType::String(s.into()))
                     .unwrap_or_else(|_| StringType::Bytes(bytes));
 
                 Ok(str)
             }
-            b'F' => Err(Error::NonUtf8String("ASCII".to_string())),
+            b'F' => Ok(StringType::Bytes(bytes)),
             b'"' => {
-                let str = self.read_string()?.into_string().unwrap();
+                let encoding = self.read_string()?.into_string().unwrap();
+                println!("warning: non utf8 string {encoding}");
 
-                Err(Error::NonUtf8String(str.to_string()))
+                let str = std::str::from_utf8(bytes)
+                    .map(|s| StringType::String(s.into()))
+                    .unwrap_or_else(|_| StringType::Bytes(bytes));
+
+                Ok(str)
+            }
+            b'@' => {
+                let _index = self.read_int::<usize>()?;
+
+                println!("warning: non utf8 string");
+
+                let str = std::str::from_utf8(bytes)
+                    .map(|s| StringType::String(s.into()))
+                    .unwrap_or_else(|_| StringType::Bytes(bytes));
+
+                Ok(str)
             }
             kind => Err(Self::type_error(kind, "bool/string")),
         }
@@ -221,7 +245,10 @@ impl<'de> Deserializer<'de> {
                     let str = self.parse_string()?;
 
                     match str {
-                        StringType::String(str) => visitor.visit_borrowed_str(str),
+                        StringType::String(str) => match str {
+                            Cow::Borrowed(str) => visitor.visit_borrowed_str(str),
+                            Cow::Owned(str) => visitor.visit_string(str),
+                        },
                         StringType::Bytes(bytes) => visitor.visit_borrowed_bytes(bytes),
                     }
                 }
@@ -257,7 +284,7 @@ impl<'de> Deserializer<'de> {
             b'F' => "unexpected bool (false)",
             b'0' => "unexpected nil",
             b'[' => "unexpected array",
-            b'{' => "unexpected hash",
+            b'{' | b'}' => "unexpected hash",
             b'u' => "unexpected userdata",
             _ => return super::Error::UnsupportedType(kind),
         };
@@ -293,6 +320,16 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
 
                 visitor.visit_map(ArraySeq::new(self, length))
             }
+            b'}' => {
+                self.read()?;
+                let length = self.read_int()?;
+
+                let res = visitor.visit_map(ArraySeq::new(self, length))?;
+
+                self.deserialize_any(serde::de::IgnoredAny)?;
+
+                Ok(res)
+            }
             b'u' => {
                 self.read()?;
                 let _name = self.parse_sym()?;
@@ -305,7 +342,10 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
                 let str = self.read_string()?;
 
                 match str {
-                    StringType::String(str) => visitor.visit_borrowed_str(str),
+                    StringType::String(str) => match str {
+                        Cow::Borrowed(str) => visitor.visit_borrowed_str(str),
+                        Cow::Owned(str) => visitor.visit_string(str),
+                    },
                     StringType::Bytes(bytes) => visitor.visit_borrowed_bytes(bytes),
                 }
             }
