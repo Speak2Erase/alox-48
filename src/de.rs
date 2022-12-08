@@ -52,7 +52,6 @@ impl<'de> Deserializer<'de> {
     }
 
     /// FIXME: Make these into nom parsers
-    #[inline]
     fn read(&mut self) -> Result<u8, Error> {
         self.cursor += 1;
         if self.cursor > self.input.len() {
@@ -67,9 +66,8 @@ impl<'de> Deserializer<'de> {
         self.input[self.cursor]
     }
 
-    #[inline]
     fn read_bytes(&mut self, len: usize) -> Result<&'de [u8], Error> {
-        if self.cursor + len >= self.input.len() {
+        if self.cursor + len > self.input.len() {
             Err(Error::Eof)
         } else {
             self.cursor += len;
@@ -296,6 +294,11 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
 
                 visitor.visit_map(ClassSeq::new(self, length))
             }
+            b'0' => {
+                self.read()?;
+
+                visitor.visit_unit()
+            }
             kind => Err(Deserializer::type_error(kind, "any")),
         }
     }
@@ -395,7 +398,10 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
         V: de::Visitor<'de>,
     {
         match self.peek() {
-            b'0' => visitor.visit_none(),
+            b'0' => {
+                self.read()?;
+                visitor.visit_none()
+            }
             _ => visitor.visit_some(self),
         }
     }
