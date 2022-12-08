@@ -60,7 +60,7 @@ impl<'de> Deserialize<'de> for Value {
             where
                 E: serde::de::Error,
             {
-                Ok(Value::Userdata(v.to_vec()))
+                Ok(Value::Bytes(v.to_vec()))
             }
 
             fn visit_borrowed_str<E>(self, v: &'de str) -> Result<Self::Value, E>

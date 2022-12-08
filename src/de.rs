@@ -36,6 +36,12 @@ pub struct Deserializer<'de> {
     remove_ivar_prefix: bool,
 }
 
+#[derive(Debug, enum_as_inner::EnumAsInner)]
+enum StringType<'de> {
+    String(&'de str),
+    Bytes(&'de [u8]),
+}
+
 impl<'de> Deserializer<'de> {
     pub fn new(input: &'de [u8]) -> crate::Result<Self> {
         if input[0..=1] != [4, 8] {
@@ -109,10 +115,12 @@ impl<'de> Deserializer<'de> {
         self.read_bytes(len)
     }
 
-    fn read_string(&mut self) -> Result<&'de str, Error> {
+    fn read_string(&mut self) -> Result<StringType<'de>, Error> {
         let bytes = self.read_len_bytes()?;
 
-        let str = std::str::from_utf8(bytes)?;
+        let str = std::str::from_utf8(bytes)
+            .map(StringType::String)
+            .unwrap_or_else(|_| StringType::Bytes(bytes));
 
         Ok(str)
     }
@@ -128,7 +136,7 @@ impl<'de> Deserializer<'de> {
 
     fn parse_float(&mut self) -> Result<f64, Error> {
         let res = match self.read()? {
-            b'f' => match self.read_string()? {
+            b'f' => match self.read_string()?.into_string().unwrap() {
                 "inf" => f64::INFINITY,
                 "-inf" => f64::NEG_INFINITY,
                 "nan" => f64::NAN,
@@ -144,15 +152,16 @@ impl<'de> Deserializer<'de> {
 
     fn parse_sym(&mut self) -> Result<&'de str, Error> {
         match self.read()? {
-            b':' => self.read_string().map(|mut str| {
+            b':' => {
+                let mut str = self.read_string()?.into_string().unwrap();
                 if self.remove_ivar_prefix {
                     str = &str[1..];
                 }
 
                 self.symlink.push(str);
 
-                str
-            }),
+                Ok(str)
+            }
             b';' => self.read_symtable(),
             kind => Err(Self::type_error(kind, "symbol")),
         }
@@ -172,7 +181,7 @@ impl<'de> Deserializer<'de> {
         Ok(self.symlink[index])
     }
 
-    fn parse_string(&mut self) -> Result<&'de str, super::Error> {
+    fn parse_string(&mut self) -> Result<StringType<'de>, super::Error> {
         let bytes = self.read_len_bytes()?;
 
         let instance_var_num = self.read_int::<usize>()?;
@@ -184,13 +193,15 @@ impl<'de> Deserializer<'de> {
 
         match self.read()? {
             b'T' => {
-                let str = std::str::from_utf8(bytes)?;
+                let str = std::str::from_utf8(bytes)
+                    .map(StringType::String)
+                    .unwrap_or_else(|_| StringType::Bytes(bytes));
 
                 Ok(str)
             }
             b'F' => Err(Error::NonUtf8String("ASCII".to_string())),
             b'"' => {
-                let str = self.read_string()?;
+                let str = self.read_string()?.into_string().unwrap();
 
                 Err(Error::NonUtf8String(str.to_string()))
             }
@@ -206,7 +217,14 @@ impl<'de> Deserializer<'de> {
 
         match self.read()? {
             b'I' => match self.read()? {
-                b'"' => visitor.visit_borrowed_str(self.parse_string()?),
+                b'"' => {
+                    let str = self.parse_string()?;
+
+                    match str {
+                        StringType::String(str) => visitor.visit_borrowed_str(str),
+                        StringType::Bytes(bytes) => visitor.visit_borrowed_bytes(bytes),
+                    }
+                }
                 kind => Err(Self::type_error(kind, "object/string")),
             },
             b'@' => {
@@ -284,7 +302,12 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
             b'"' => {
                 self.read()?;
 
-                visitor.visit_borrowed_str(self.read_string()?)
+                let str = self.read_string()?;
+
+                match str {
+                    StringType::String(str) => visitor.visit_borrowed_str(str),
+                    StringType::Bytes(bytes) => visitor.visit_borrowed_bytes(bytes),
+                }
             }
             b'o' => {
                 self.read()?;

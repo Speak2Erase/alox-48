@@ -16,6 +16,8 @@
 // along with alox-48.  If not, see <http://www.gnu.org/licenses/>.
 
 mod de;
+mod from;
+mod ser;
 
 use std::hash::Hash;
 
@@ -30,7 +32,7 @@ pub enum Value {
     String(String),
     Array(RbArray),
     Hash(RbHash),
-    Userdata(Vec<u8>),
+    Bytes(Vec<u8>),
 }
 
 impl PartialEq for Value {
