@@ -19,10 +19,11 @@ mod de;
 mod from;
 mod ser;
 
+use enum_as_inner::EnumAsInner;
 use std::hash::Hash;
 
 use indexmap::IndexMap;
-#[derive(Default, Debug, Clone, enum_as_inner::EnumAsInner)]
+#[derive(Default, Debug, Clone, EnumAsInner)]
 pub enum Value {
     #[default]
     Nil,
@@ -30,21 +31,113 @@ pub enum Value {
     Float(f64),
     Integer(i128),
     String(String),
+    Symbol(String),
     Array(RbArray),
     Hash(RbHash),
-    Bytes(Vec<u8>),
+    Userdata(Userdata),
+    Object(Object),
+}
+
+#[derive(Hash, PartialEq, Eq, Default, Debug, Clone)]
+pub struct Userdata {
+    pub class: String,
+    pub data: Vec<u8>,
+}
+
+#[derive(PartialEq, Eq, Default, Debug, Clone)]
+pub struct Object {
+    pub class: String,
+    pub fields: RbHash,
 }
 
 impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
-        false
+        match self {
+            Value::Nil => other.is_nil(),
+            Value::Bool(b) => {
+                if let Value::Bool(b2) = other {
+                    b == b2
+                } else {
+                    false
+                }
+            }
+            Value::Float(f) => {
+                if let Value::Float(f2) = other {
+                    (f.is_nan() && f2.is_nan()) || f == f2
+                } else {
+                    false
+                }
+            }
+            Value::Integer(i) => {
+                if let Value::Integer(i2) = other {
+                    i == i2
+                } else {
+                    false
+                }
+            }
+            Value::String(s) => {
+                if let Value::String(s2) = other {
+                    s == s2
+                } else {
+                    false
+                }
+            }
+            Value::Symbol(s) => {
+                if let Value::Symbol(s2) = other {
+                    s == s2
+                } else {
+                    false
+                }
+            }
+            Value::Array(v) => {
+                if let Value::Array(v2) = other {
+                    v == v2
+                } else {
+                    false
+                }
+            }
+            Value::Hash(h) => {
+                if let Value::Hash(h2) = other {
+                    h == h2
+                } else {
+                    false
+                }
+            }
+            Value::Object(o) => {
+                if let Value::Object(o2) = other {
+                    o == o2
+                } else {
+                    false
+                }
+            }
+            Value::Userdata(u) => {
+                if let Value::Userdata(u2) = other {
+                    u == u2
+                } else {
+                    false
+                }
+            }
+        }
     }
 }
 
 impl Eq for Value {}
 
 impl Hash for Value {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {}
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        match self {
+            Value::Nil => {}
+            Value::Bool(b) => b.hash(state),
+            Value::Float(_) => {}
+            Value::Integer(i) => i.hash(state),
+            Value::String(s) => s.hash(state),
+            Value::Symbol(s) => s.hash(state),
+            Value::Array(v) => v.hash(state),
+            Value::Hash(_) => {}
+            Value::Object(_) => {}
+            Value::Userdata(u) => u.hash(state),
+        }
+    }
 }
 
 pub type RbArray = Vec<Value>;

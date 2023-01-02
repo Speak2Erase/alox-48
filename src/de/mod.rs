@@ -1,6 +1,3 @@
-#![warn(rust_2018_idioms, clippy::all)]
-#![feature(min_specialization)]
-
 // Copyright (C) 2022 Lily Lyons
 //
 // This file is part of alox-48.
@@ -18,21 +15,8 @@
 // You should have received a copy of the GNU General Public License
 // along with alox-48.  If not, see <http://www.gnu.org/licenses/>.
 
-pub mod de;
-pub mod error;
-pub mod ser;
+mod deserializer;
+mod extension;
 
-pub mod value;
-
-pub use de::Deserializer;
-pub use error::{Error, Result};
-pub use ser::{to_bytes, Serializer};
-pub use value::Value;
-
-pub fn from_bytes<'de, T>(data: &'de [u8]) -> Result<T>
-where
-    T: serde::Deserialize<'de>,
-{
-    let mut deserializer = Deserializer::new(data)?;
-    T::deserialize(&mut deserializer)
-}
+pub use deserializer::Deserializer;
+pub use extension::VisitorExt;

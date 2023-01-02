@@ -20,11 +20,11 @@ pub mod rpg {
     }
 
     #[derive(Deserialize, Serialize, Debug)]
-    #[serde(from = "&[u8]")]
+    #[serde(from = "alox_48::value::Userdata")]
     pub struct Table;
 
-    impl<'de> From<&'de [u8]> for Table {
-        fn from(_value: &'de [u8]) -> Self {
+    impl From<alox_48::value::Userdata> for Table {
+        fn from(_value: alox_48::value::Userdata) -> Self {
             Self
         }
     }
@@ -117,3 +117,6 @@ pub mod rpg {
         pub parameters: Vec<alox_48::Value>,
     }
 }
+
+// appease clippy
+fn main() {}

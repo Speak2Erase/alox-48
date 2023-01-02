@@ -54,5 +54,5 @@ puts Marshal.dump(klass)
 
     let other: MyClass = alox_48::from_bytes(&data).unwrap();
 
-    println!("{:?}", other);
+    println!("{other:?}",);
 }

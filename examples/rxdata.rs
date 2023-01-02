@@ -9,5 +9,5 @@ fn main() {
 
     let map: rmxp_structs::rpg::Map = alox_48::from_bytes(&bytes).unwrap();
 
-    println!("{:#?}", map)
+    println!("{map:#?}")
 }

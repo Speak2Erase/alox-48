@@ -18,13 +18,13 @@ end
 class Test
     def initialize()
         @map = {
-            "@test" => true
+            :abc => true
         }
     end
 end
 
 klass = MyClass.new
-puts Marshal.dump(klass)
+print Marshal.dump(klass)
         "#,
         )
         .output()
@@ -41,5 +41,5 @@ puts Marshal.dump(klass)
 
     let result: Result<alox_48::Value, _> = alox_48::from_bytes(&data);
 
-    println!("{:#?}", result)
+    println!("{result:#?}")
 }

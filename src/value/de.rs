@@ -17,7 +17,8 @@
 
 use serde::{de::Visitor, Deserialize, Deserializer};
 
-use crate::value::{RbArray, RbHash};
+use crate::de::VisitorExt;
+use crate::value::{Object, RbArray, RbHash, Userdata};
 
 use super::Value;
 
@@ -54,13 +55,6 @@ impl<'de> Deserialize<'de> for Value {
                 E: serde::de::Error,
             {
                 Ok(Value::Float(v))
-            }
-
-            fn visit_borrowed_bytes<E>(self, v: &'de [u8]) -> Result<Self::Value, E>
-            where
-                E: serde::de::Error,
-            {
-                Ok(Value::Bytes(v.to_vec()))
             }
 
             fn visit_borrowed_str<E>(self, v: &'de str) -> Result<Self::Value, E>
@@ -124,6 +118,68 @@ impl<'de> Deserialize<'de> for Value {
             }
         }
 
+        impl<'de> VisitorExt<'de> for ValueVisitor {
+            fn visit_object<A>(self, class: &'de str, fields: A) -> Result<Self::Value, A::Error>
+            where
+                A: serde::de::MapAccess<'de>,
+            {
+                let de = serde::de::value::MapAccessDeserializer::new(fields);
+                let fields = RbHash::deserialize(de)?;
+                Ok(Value::Object(Object {
+                    class: class.to_string(),
+                    fields,
+                }))
+            }
+
+            fn visit_userdata<E>(self, class: &'de str, data: &'de [u8]) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(Value::Userdata(Userdata {
+                    class: class.to_string(),
+                    data: data.to_vec(),
+                }))
+            }
+
+            fn visit_symbol<E>(self, sym: &'de str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(Value::Symbol(sym.to_string()))
+            }
+        }
+
         deserializer.deserialize_any(ValueVisitor)
+    }
+}
+
+impl<'de> Deserialize<'de> for Userdata {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct UserdataVisitor;
+
+        impl<'de> Visitor<'de> for UserdataVisitor {
+            type Value = Userdata;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("userdata")
+            }
+        }
+
+        impl<'de> VisitorExt<'de> for UserdataVisitor {
+            fn visit_userdata<E>(self, class: &'de str, data: &'de [u8]) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(Userdata {
+                    class: class.to_string(),
+                    data: data.to_vec(),
+                })
+            }
+        }
+
+        deserializer.deserialize_any(UserdataVisitor)
     }
 }
