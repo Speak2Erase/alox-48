@@ -4,32 +4,33 @@ use std::process::Command;
 fn main() {
     color_eyre::install().unwrap();
 
-    let data = Command::new("ruby")
+    Command::new("ruby")
         .arg("-e")
         .arg(
             r#"
-class MyClass
-    def initialize()
-        @test = Test.new
-        @bool = true
-    end
-end
+            class MyClass
+                def initialize()
+                    @test = Test.new
+                    @bool = true
+                end
+            end
 
-class Test
-    def initialize()
-        @map = {
-            :abc => true
-        }
-    end
-end
-
-klass = MyClass.new
-print Marshal.dump(klass)
+            class Test
+                def initialize()
+                    @map = {
+                        :abc => true
+                    }
+                end
+            end
+                
+            klass = MyClass.new
+            Marshal.dump(klass, File.open("value.marshal", "wb"))
         "#,
         )
-        .output()
-        .unwrap()
-        .stdout;
+        .status()
+        .unwrap();
+
+    let data = std::fs::read("value.marshal").unwrap();
 
     assert_eq!(
         data[0..=1],

@@ -15,17 +15,41 @@ pub mod rpg {
         pub bgs: AudioFile,
         pub encounter_list: Vec<i32>,
         pub encounter_step: i32,
-        pub data: Table,
+        pub data: Table3,
         pub events: HashMap<i32, event::Event>,
     }
 
     #[derive(Deserialize, Serialize, Debug)]
     #[serde(from = "alox_48::value::Userdata")]
-    pub struct Table;
+    pub struct Table3 {
+        xsize: usize,
+        ysize: usize,
+        zsize: usize,
+        data: Vec<i16>,
+    }
 
-    impl From<alox_48::value::Userdata> for Table {
-        fn from(_value: alox_48::value::Userdata) -> Self {
-            Self
+    impl From<alox_48::value::Userdata> for Table3 {
+        fn from(value: alox_48::value::Userdata) -> Self {
+            let u32_slice: &[u32] =
+                bytemuck::cast_slice(&value.data[0..std::mem::size_of::<u32>() * 5]);
+
+            assert_eq!(u32_slice[0], 3);
+            let xsize = u32_slice[1] as usize;
+            let ysize = u32_slice[2] as usize;
+            let zsize = u32_slice[3] as usize;
+            let len = u32_slice[4] as usize;
+
+            assert_eq!(xsize * ysize * zsize, len);
+            let data =
+                bytemuck::cast_slice(&value.data[(std::mem::size_of::<u32>() * 5)..]).to_vec();
+            assert_eq!(data.len(), len as _);
+
+            Self {
+                xsize,
+                ysize,
+                zsize,
+                data,
+            }
         }
     }
 

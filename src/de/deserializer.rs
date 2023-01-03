@@ -102,7 +102,6 @@ impl<'de> Deserializer<'de> {
     #[inline]
     fn read_len_bytes(&mut self) -> Result<&'de [u8]> {
         let len = self.read_int::<usize>()?;
-        println!("{len}");
         self.read_bytes(len)
     }
 
@@ -110,7 +109,6 @@ impl<'de> Deserializer<'de> {
         let bytes = self.read_len_bytes()?;
 
         let str = String::from_utf8_lossy(bytes);
-        println!("{str:?}");
         Ok(str)
     }
 
@@ -194,7 +192,7 @@ impl<'de> Deserializer<'de> {
             }
             b'"' => {
                 let encoding = self.read_string()?;
-                println!("warning: non utf8 string {encoding}");
+                eprintln!("warning: non utf8 string {encoding}");
 
                 let str = String::from_utf8_lossy(bytes);
                 Ok(str)
@@ -202,7 +200,7 @@ impl<'de> Deserializer<'de> {
             b'@' => {
                 let _index = self.read_int::<usize>()?;
 
-                println!("warning: non utf8 string");
+                eprintln!("warning: non utf8 string");
 
                 let str = String::from_utf8_lossy(bytes);
 
