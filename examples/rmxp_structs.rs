@@ -39,7 +39,7 @@ pub enum ParameterType {
 
 macro_rules! symbol {
     ($string:literal) => {
-        $string
+        &alox_48::value::Symbol::from($string)
         // &alox_48::Value::Symbol($string.to_string())
     };
 }
@@ -51,11 +51,15 @@ impl From<alox_48::Value> for ParameterType {
 
         match value {
             Value::Integer(i) => Self::Integer(i as _),
-            Value::String(str) => Self::String(str),
-            // Value::Symbol(sym) => Self::String(sym),
+            Value::String(str) => Self::String(str.to_string_lossy().into_owned()),
             Value::Object(obj) if obj.class == "RPG::AudioFile" => {
                 Self::AudioFile(rpg::AudioFile {
-                    name: obj.fields[symbol!("name")].clone().into_string().unwrap(),
+                    name: obj.fields[symbol!("name")]
+                        .clone()
+                        .into_string()
+                        .unwrap()
+                        .to_string_lossy()
+                        .into_owned(),
                     volume: obj.fields[symbol!("volume")]
                         .clone()
                         .into_integer()
@@ -111,7 +115,7 @@ impl From<alox_48::Value> for ParameterType {
             Value::Array(ary) => Self::Array(
                 ary.clone()
                     .into_iter()
-                    .map(|v| v.into_string().unwrap())
+                    .map(|v| v.into_string().unwrap().to_string_lossy().into_owned())
                     .collect(),
             ),
             Value::Bool(b) => Self::Bool(b),

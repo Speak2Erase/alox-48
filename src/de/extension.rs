@@ -18,6 +18,8 @@
 use serde::de::Error as SerdeError;
 use serde::de::{MapAccess, Unexpected, Visitor};
 
+use crate::value::RbFields;
+
 pub trait VisitorExt<'de>: Visitor<'de> {
     fn visit_userdata<E>(self, class: &'de str, data: &'de [u8]) -> Result<Self::Value, E>
     where
@@ -28,6 +30,10 @@ pub trait VisitorExt<'de>: Visitor<'de> {
         A: MapAccess<'de>;
 
     fn visit_symbol<E>(self, sym: &'de str) -> Result<Self::Value, E>
+    where
+        E: SerdeError;
+
+    fn visit_ruby_string<E>(self, str: &'de [u8], fields: RbFields) -> Result<Self::Value, E>
     where
         E: SerdeError;
 }
@@ -59,6 +65,22 @@ where
     {
         self.visit_borrowed_str(sym)
     }
+
+    default fn visit_ruby_string<E>(
+        self,
+        str: &'de [u8],
+        _fields: RbFields,
+    ) -> Result<Self::Value, E>
+    where
+        E: SerdeError,
+    {
+        let str = String::from_utf8_lossy(str);
+
+        match str {
+            std::borrow::Cow::Borrowed(str) => self.visit_borrowed_str(str),
+            std::borrow::Cow::Owned(str) => self.visit_string(str),
+        }
+    }
 }
 
 impl<'de> VisitorExt<'de> for serde::de::IgnoredAny {
@@ -77,6 +99,13 @@ impl<'de> VisitorExt<'de> for serde::de::IgnoredAny {
     }
 
     fn visit_symbol<E>(self, _sym: &'de str) -> Result<Self::Value, E>
+    where
+        E: SerdeError,
+    {
+        Ok(serde::de::IgnoredAny)
+    }
+
+    fn visit_ruby_string<E>(self, _str: &'de [u8], _fields: RbFields) -> Result<Self::Value, E>
     where
         E: SerdeError,
     {

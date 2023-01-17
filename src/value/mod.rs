@@ -17,6 +17,7 @@
 
 mod de;
 mod from;
+mod impls;
 mod ser;
 
 use enum_as_inner::EnumAsInner;
@@ -30,8 +31,8 @@ pub enum Value {
     Bool(bool),
     Float(f64),
     Integer(i64),
-    String(String),
-    Symbol(String),
+    String(RbString),
+    Symbol(Symbol),
     Array(RbArray),
     Hash(RbHash),
     Userdata(Userdata),
@@ -47,8 +48,17 @@ pub struct Userdata {
 #[derive(PartialEq, Eq, Default, Debug, Clone)]
 pub struct Object {
     pub class: String,
-    pub fields: IndexMap<String, Value>,
+    pub fields: RbFields,
 }
+
+#[derive(PartialEq, Eq, Default, Debug, Clone)]
+pub struct RbString {
+    pub data: Vec<u8>,
+    pub fields: RbFields,
+}
+
+#[derive(Hash, PartialEq, Eq, Default, Debug, Clone)]
+pub struct Symbol(pub String);
 
 impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
@@ -130,8 +140,10 @@ impl Hash for Value {
             Value::Bool(b) => b.hash(state),
             Value::Float(_) => {}
             Value::Integer(i) => i.hash(state),
-            Value::String(s) => s.hash(state),
-            Value::Symbol(s) => s.hash(state),
+            Value::String(s) => {
+                s.data.hash(state);
+            }
+            Value::Symbol(s) => s.0.hash(state),
             Value::Array(v) => v.hash(state),
             Value::Hash(_) => {}
             Value::Object(_) => {}
@@ -142,3 +154,4 @@ impl Hash for Value {
 
 pub type RbArray = Vec<Value>;
 pub type RbHash = IndexMap<Value, Value>;
+pub type RbFields = IndexMap<Symbol, Value>;

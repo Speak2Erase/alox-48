@@ -15,10 +15,152 @@
 // You should have received a copy of the GNU General Public License
 // along with Luminol.  If not, see <http://www.gnu.org/licenses/>.
 
-use super::Value;
+use super::{Object, RbFields, RbHash, RbString, Symbol, Userdata, Value};
+
+macro_rules! utf8_enc {
+    () => {{
+        let mut f = RbFields::new();
+        f.insert("E".into(), true.into());
+
+        f
+    }};
+}
+
+impl Value {
+    pub fn from_symbol(symbol: String) -> Self {
+        Self::Symbol(symbol.into())
+    }
+}
 
 impl From<String> for Value {
     fn from(value: String) -> Self {
+        let fields = utf8_enc!();
+
+        Value::String(RbString {
+            data: value.into_bytes(),
+            fields,
+        })
+    }
+}
+
+impl From<RbString> for Value {
+    fn from(value: RbString) -> Self {
         Self::String(value)
+    }
+}
+
+impl From<bool> for Value {
+    fn from(value: bool) -> Self {
+        Self::Bool(value)
+    }
+}
+
+impl From<f64> for Value {
+    fn from(value: f64) -> Self {
+        Self::Float(value)
+    }
+}
+
+impl From<i64> for Value {
+    fn from(value: i64) -> Self {
+        Self::Integer(value)
+    }
+}
+
+impl From<RbHash> for Value {
+    fn from(value: RbHash) -> Self {
+        Self::Hash(value)
+    }
+}
+
+impl<T> From<Vec<T>> for Value
+where
+    T: Into<Value>,
+{
+    fn from(value: Vec<T>) -> Self {
+        Self::Array(value.into_iter().map(Into::into).collect())
+    }
+}
+
+impl TryInto<String> for Value {
+    type Error = Self;
+
+    fn try_into(self) -> Result<String, Self::Error> {
+        self.into_string()
+            .map(|str| str.to_string_lossy().into_owned())
+    }
+}
+
+impl TryInto<RbString> for Value {
+    type Error = Self;
+
+    fn try_into(self) -> Result<RbString, Self::Error> {
+        self.into_string()
+    }
+}
+
+impl TryInto<i64> for Value {
+    type Error = Self;
+
+    fn try_into(self) -> Result<i64, Self::Error> {
+        self.into_integer()
+    }
+}
+
+impl TryInto<f64> for Value {
+    type Error = Self;
+
+    fn try_into(self) -> Result<f64, Self::Error> {
+        self.into_float()
+    }
+}
+
+impl TryInto<Object> for Value {
+    type Error = Self;
+
+    fn try_into(self) -> Result<Object, Self::Error> {
+        self.into_object()
+    }
+}
+
+impl TryInto<Userdata> for Value {
+    type Error = Self;
+
+    fn try_into(self) -> Result<Userdata, Self::Error> {
+        self.into_userdata()
+    }
+}
+
+impl From<String> for Symbol {
+    fn from(value: String) -> Self {
+        Self(value)
+    }
+}
+
+impl From<&str> for Symbol {
+    fn from(value: &str) -> Self {
+        Self(value.to_string())
+    }
+}
+
+impl From<&str> for RbString {
+    fn from(value: &str) -> Self {
+        let fields = utf8_enc!();
+
+        Self {
+            data: value.as_bytes().to_vec(),
+            fields,
+        }
+    }
+}
+
+impl From<String> for RbString {
+    fn from(value: String) -> Self {
+        let fields = utf8_enc!();
+
+        Self {
+            data: value.into_bytes(),
+            fields,
+        }
     }
 }

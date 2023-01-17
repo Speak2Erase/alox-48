@@ -487,6 +487,10 @@ impl<'a, 'de> de::SeqAccess<'de> for ArraySeq<'a, 'de> {
 
         seed.deserialize(&mut *self.de).map(Some)
     }
+
+    fn size_hint(&self) -> Option<usize> {
+        Some(self.length)
+    }
 }
 
 impl<'a, 'de> de::MapAccess<'de> for ArraySeq<'a, 'de> {
@@ -510,6 +514,10 @@ impl<'a, 'de> de::MapAccess<'de> for ArraySeq<'a, 'de> {
         V: de::DeserializeSeed<'de>,
     {
         seed.deserialize(&mut *self.de)
+    }
+
+    fn size_hint(&self) -> Option<usize> {
+        Some(self.length)
     }
 }
 
@@ -557,5 +565,9 @@ impl<'a, 'de> de::MapAccess<'de> for ClassSeq<'a, 'de> {
         V: de::DeserializeSeed<'de>,
     {
         seed.deserialize(&mut *self.de)
+    }
+
+    fn size_hint(&self) -> Option<usize> {
+        Some(self.length)
     }
 }

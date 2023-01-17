@@ -18,9 +18,9 @@
 use serde::{de::Visitor, Deserialize, Deserializer};
 
 use crate::de::VisitorExt;
-use crate::value::{Object, RbArray, RbHash, Userdata};
+use crate::value::{Object, RbArray, RbFields, RbHash, RbString, Userdata};
 
-use super::Value;
+use super::{Symbol, Value};
 
 impl<'de> Deserialize<'de> for Value {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
@@ -61,21 +61,21 @@ impl<'de> Deserialize<'de> for Value {
             where
                 E: serde::de::Error,
             {
-                Ok(Value::String(v.to_string()))
+                self.visit_str(v)
             }
 
             fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
             where
                 E: serde::de::Error,
             {
-                Ok(Value::String(v.to_string()))
+                Ok(Value::String(v.into()))
             }
 
             fn visit_string<E>(self, v: String) -> Result<Self::Value, E>
             where
                 E: serde::de::Error,
             {
-                Ok(Value::String(v))
+                Ok(Value::String(v.into()))
             }
 
             fn visit_unit<E>(self) -> Result<Self::Value, E>
@@ -124,7 +124,7 @@ impl<'de> Deserialize<'de> for Value {
                 A: serde::de::MapAccess<'de>,
             {
                 let de = serde::de::value::MapAccessDeserializer::new(fields);
-                let fields = indexmap::IndexMap::deserialize(de)?;
+                let fields = RbFields::deserialize(de)?;
                 Ok(Value::Object(Object {
                     class: class.to_string(),
                     fields,
@@ -145,11 +145,149 @@ impl<'de> Deserialize<'de> for Value {
             where
                 E: serde::de::Error,
             {
-                Ok(Value::Symbol(sym.to_string()))
+                Ok(Value::Symbol(sym.into()))
             }
         }
 
         deserializer.deserialize_any(ValueVisitor)
+    }
+}
+
+impl<'de> Deserialize<'de> for Symbol {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct SymbolVisitor;
+
+        impl<'de> Visitor<'de> for SymbolVisitor {
+            type Value = Symbol;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("symbol")
+            }
+
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(v.into())
+            }
+
+            fn visit_string<E>(self, v: String) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(v.into())
+            }
+
+            fn visit_borrowed_str<E>(self, v: &'de str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(v.into())
+            }
+        }
+
+        impl<'de> VisitorExt<'de> for SymbolVisitor {
+            fn visit_symbol<E>(self, sym: &'de str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(sym.into())
+            }
+        }
+
+        deserializer.deserialize_any(SymbolVisitor)
+    }
+}
+
+impl<'de> Deserialize<'de> for RbString {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct StringVisitor;
+
+        impl<'de> Visitor<'de> for StringVisitor {
+            type Value = RbString;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("a ruby string")
+            }
+
+            fn visit_borrowed_str<E>(self, v: &'de str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(v.into())
+            }
+
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(v.into())
+            }
+
+            fn visit_string<E>(self, v: String) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(v.into())
+            }
+        }
+
+        impl<'de> VisitorExt<'de> for StringVisitor {
+            fn visit_ruby_string<E>(
+                self,
+                str: &'de [u8],
+                fields: RbFields,
+            ) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(RbString {
+                    data: str.to_vec(),
+                    fields,
+                })
+            }
+        }
+
+        deserializer.deserialize_any(StringVisitor)
+    }
+}
+
+impl<'de> Deserialize<'de> for Object {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct ObjectVisitor;
+
+        impl<'de> Visitor<'de> for ObjectVisitor {
+            type Value = Object;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("object")
+            }
+        }
+
+        impl<'de> VisitorExt<'de> for ObjectVisitor {
+            fn visit_object<A>(self, class: &'de str, fields: A) -> Result<Self::Value, A::Error>
+            where
+                A: serde::de::MapAccess<'de>,
+            {
+                let de = serde::de::value::MapAccessDeserializer::new(fields);
+                let fields = RbFields::deserialize(de)?;
+                Ok(Object {
+                    class: class.to_string(),
+                    fields,
+                })
+            }
+        }
+
+        deserializer.deserialize_any(ObjectVisitor)
     }
 }
 
