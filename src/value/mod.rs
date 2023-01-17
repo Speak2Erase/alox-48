@@ -29,7 +29,7 @@ pub enum Value {
     Nil,
     Bool(bool),
     Float(f64),
-    Integer(i128),
+    Integer(i64),
     String(String),
     Symbol(String),
     Array(RbArray),
@@ -47,7 +47,7 @@ pub struct Userdata {
 #[derive(PartialEq, Eq, Default, Debug, Clone)]
 pub struct Object {
     pub class: String,
-    pub fields: RbHash,
+    pub fields: IndexMap<String, Value>,
 }
 
 impl PartialEq for Value {

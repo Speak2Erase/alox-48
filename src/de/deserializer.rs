@@ -122,6 +122,8 @@ impl<'de> Deserializer<'de> {
     }
 
     fn parse_float(&mut self) -> Result<f64> {
+        self.objtable.push(self.cursor);
+
         let res = match self.read()? {
             b'f' => match self.read_string()?.as_ref() {
                 "inf" => f64::INFINITY,
@@ -191,6 +193,8 @@ impl<'de> Deserializer<'de> {
                 Ok(str)
             }
             b'"' => {
+                self.objtable.push(self.cursor);
+
                 let encoding = self.read_string()?;
                 eprintln!("warning: non utf8 string {encoding}");
 
@@ -219,6 +223,8 @@ impl<'de> Deserializer<'de> {
         match self.read()? {
             b'I' => match self.read()? {
                 b'"' => {
+                    self.objtable.push(self.cursor);
+
                     let str = self.parse_string()?;
 
                     match str {
@@ -230,7 +236,7 @@ impl<'de> Deserializer<'de> {
             },
             b'@' => {
                 // FIXME: This is slow!
-                let index = self.read_int::<usize>()? - 1;
+                let index = self.read_int::<usize>()?;
 
                 let cursor = self.cursor;
                 self.cursor = self.objtable[index];
@@ -274,27 +280,32 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     where
         V: VisitorExt<'de>,
     {
-        self.objtable.push(self.cursor);
         match self.peek() {
             b':' | b';' => visitor.visit_symbol(self.parse_sym()?),
             b'T' | b'F' => visitor.visit_bool(self.parse_bool()?),
             b'f' => visitor.visit_f64(self.parse_float()?),
-            b'i' => visitor.visit_i128(self.parse_int()?),
+            b'i' => visitor.visit_i64(self.parse_int()?),
             b'l' => Err(Error::Unsupported),
             b'I' | b'@' => self.parse_instance(visitor),
             b'[' => {
+                self.objtable.push(self.cursor);
+
                 self.read()?;
                 let length = self.read_int()?;
 
                 visitor.visit_seq(ArraySeq::new(self, length))
             }
             b'{' => {
+                self.objtable.push(self.cursor);
+
                 self.read()?;
                 let length = self.read_int()?;
 
                 visitor.visit_map(ArraySeq::new(self, length))
             }
             b'}' => {
+                self.objtable.push(self.cursor);
+
                 self.read()?;
                 let length = self.read_int()?;
 
@@ -305,12 +316,16 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
                 Ok(res)
             }
             b'u' => {
+                self.objtable.push(self.cursor);
+
                 self.read()?;
                 let name = self.parse_sym()?;
 
                 visitor.visit_userdata(name, self.read_len_bytes()?)
             }
             b'"' => {
+                self.objtable.push(self.cursor);
+
                 self.read()?;
 
                 let str = self.read_string()?;
@@ -321,6 +336,8 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
                 }
             }
             b'o' => {
+                self.objtable.push(self.cursor);
+
                 self.read()?;
                 let class = self.parse_sym()?;
 
@@ -339,71 +356,16 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
 
     serde::forward_to_deserialize_any! {
         bool char str string
+        i8 u8 i16 u16 i32 u32 i64 u64 f64
         bytes byte_buf newtype_struct seq tuple
         tuple_struct enum map identifier ignored_any
     }
 
-    fn deserialize_i8<V>(self, visitor: V) -> Result<V::Value>
-    where
-        V: VisitorExt<'de>,
-    {
-        visitor.visit_i8(self.parse_int()?)
-    }
-
-    fn deserialize_i16<V>(self, visitor: V) -> Result<V::Value>
-    where
-        V: VisitorExt<'de>,
-    {
-        visitor.visit_i16(self.parse_int()?)
-    }
-
-    fn deserialize_i32<V>(self, visitor: V) -> Result<V::Value>
-    where
-        V: VisitorExt<'de>,
-    {
-        visitor.visit_i32(self.parse_int()?)
-    }
-
-    fn deserialize_i64<V>(self, visitor: V) -> Result<V::Value>
-    where
-        V: VisitorExt<'de>,
-    {
-        visitor.visit_i64(self.parse_int()?)
-    }
-
     fn deserialize_i128<V>(self, visitor: V) -> Result<V::Value>
     where
-        V: VisitorExt<'de>,
+        V: de::Visitor<'de>,
     {
         visitor.visit_i128(self.parse_int()?)
-    }
-
-    fn deserialize_u8<V>(self, visitor: V) -> Result<V::Value>
-    where
-        V: VisitorExt<'de>,
-    {
-        visitor.visit_u8(self.parse_int()?)
-    }
-
-    fn deserialize_u16<V>(self, visitor: V) -> Result<V::Value>
-    where
-        V: VisitorExt<'de>,
-    {
-        visitor.visit_u16(self.parse_int()?)
-    }
-
-    fn deserialize_u32<V>(self, visitor: V) -> Result<V::Value>
-    where
-        V: VisitorExt<'de>,
-    {
-        visitor.visit_u32(self.parse_int()?)
-    }
-
-    fn deserialize_u64<V>(self, visitor: V) -> Result<V::Value>
-    where
-        V: VisitorExt<'de>,
-    {
-        visitor.visit_u64(self.parse_int()?)
     }
 
     fn deserialize_u128<V>(self, visitor: V) -> Result<V::Value>
@@ -418,13 +380,6 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
         V: VisitorExt<'de>,
     {
         visitor.visit_f32(self.parse_float()? as _)
-    }
-
-    fn deserialize_f64<V>(self, visitor: V) -> Result<V::Value>
-    where
-        V: VisitorExt<'de>,
-    {
-        visitor.visit_f64(self.parse_float()?)
     }
 
     fn deserialize_option<V>(self, visitor: V) -> Result<V::Value>
@@ -454,6 +409,8 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     where
         V: VisitorExt<'de>,
     {
+        self.objtable.push(self.cursor);
+
         match self.read()? {
             b'o' => {
                 let class = self.parse_sym()?.split("::").last().unwrap();
@@ -481,6 +438,8 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     where
         V: VisitorExt<'de>,
     {
+        self.objtable.push(self.cursor);
+
         let kind = self.read()?;
         if kind != b'o' {
             return Err(Deserializer::type_error(kind, "object"));

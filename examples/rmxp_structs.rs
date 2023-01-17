@@ -1,10 +1,159 @@
 #![allow(dead_code, missing_docs)]
 
+use serde::Deserialize;
+
+#[derive(Debug, Deserialize)]
+pub struct Color {
+    pub red: f32,
+    pub green: f32,
+    pub blue: f32,
+    pub alpha: f32,
+}
+
+// Default values
+impl Default for Color {
+    fn default() -> Self {
+        Self {
+            red: 255.0,
+            green: 255.0,
+            blue: 255.0,
+            alpha: 255.0,
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(from = "alox_48::Value")]
+pub enum ParameterType {
+    Integer(i32),
+    String(String),
+    Color(Color),
+    Tone(Tone),
+    AudioFile(rpg::AudioFile),
+    Float(f32),
+    MoveRoute(rpg::MoveRoute),
+    MoveCommand(rpg::MoveCommand),
+    Array(Vec<String>),
+    Bool(bool),
+}
+
+macro_rules! symbol {
+    ($string:literal) => {
+        $string
+        // &alox_48::Value::Symbol($string.to_string())
+    };
+}
+
+impl From<alox_48::Value> for ParameterType {
+    fn from(value: alox_48::Value) -> Self {
+        use alox_48::Value;
+        println!("{value:#?}");
+
+        match value {
+            Value::Integer(i) => Self::Integer(i as _),
+            Value::String(str) => Self::String(str),
+            // Value::Symbol(sym) => Self::String(sym),
+            Value::Object(obj) if obj.class == "RPG::AudioFile" => {
+                Self::AudioFile(rpg::AudioFile {
+                    name: obj.fields[symbol!("name")].clone().into_string().unwrap(),
+                    volume: obj.fields[symbol!("volume")]
+                        .clone()
+                        .into_integer()
+                        .unwrap() as _,
+                    pitch: obj.fields[symbol!("pitch")].clone().into_integer().unwrap() as _,
+                })
+            }
+            Value::Object(obj) if obj.class == "RPG::MoveRoute" => {
+                Self::MoveRoute(rpg::MoveRoute {
+                    repeat: obj.fields[symbol!("repeat")].clone().into_bool().unwrap(),
+                    skippable: obj.fields[symbol!("skippable")]
+                        .clone()
+                        .into_bool()
+                        .unwrap(),
+                    list: obj.fields[symbol!("list")]
+                        .clone()
+                        .into_array()
+                        .unwrap()
+                        .into_iter()
+                        .map(|obj| {
+                            let obj = obj.into_object().unwrap();
+
+                            rpg::MoveCommand {
+                                code: obj.fields[symbol!("code")].clone().into_integer().unwrap()
+                                    as _,
+                                parameters: obj.fields[symbol!("parameters")]
+                                    .clone()
+                                    .into_array()
+                                    .unwrap()
+                                    .into_iter()
+                                    .map(Into::into)
+                                    .collect(),
+                            }
+                            .into()
+                        })
+                        .collect(),
+                })
+            }
+            Value::Object(obj) if obj.class == "RPG::MoveCommand" => Self::MoveCommand(
+                rpg::MoveCommand {
+                    code: obj.fields[symbol!("code")].clone().into_integer().unwrap() as _,
+                    parameters: obj.fields[symbol!("parameters")]
+                        .clone()
+                        .into_array()
+                        .unwrap()
+                        .into_iter()
+                        .map(Into::into)
+                        .collect(),
+                }
+                .into(),
+            ),
+            Value::Float(f) => Self::Float(f as _),
+            Value::Array(ary) => Self::Array(
+                ary.clone()
+                    .into_iter()
+                    .map(|v| v.into_string().unwrap())
+                    .collect(),
+            ),
+            Value::Bool(b) => Self::Bool(b),
+            Value::Userdata(data) if data.class == "Color" => {
+                let floats = bytemuck::cast_slice(&data.data);
+
+                Self::Color(Color {
+                    red: floats[0],
+                    green: floats[1],
+                    blue: floats[2],
+                    alpha: floats[3],
+                })
+            }
+            Value::Userdata(data) if data.class == "Tone" => {
+                let floats = bytemuck::cast_slice(&data.data);
+
+                Self::Tone(Tone {
+                    red: floats[0],
+                    green: floats[1],
+                    blue: floats[2],
+                    gray: floats[3],
+                })
+            }
+            _ => panic!("Unexpected type {value:#?}"),
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Tone {
+    pub red: f32,
+    pub green: f32,
+    pub blue: f32,
+    pub gray: f32,
+}
+
 pub mod rpg {
     use serde::{Deserialize, Serialize};
     use std::collections::HashMap;
 
     #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
     pub struct Map {
         pub tileset_id: i32,
         pub width: usize,
@@ -61,6 +210,7 @@ pub mod rpg {
             use super::super::{EventCommand, MoveRoute};
 
             #[derive(Debug, Deserialize, Serialize)]
+            #[serde(deny_unknown_fields)]
             pub struct Condition {
                 pub switch1_valid: bool,
                 pub switch2_valid: bool,
@@ -74,6 +224,7 @@ pub mod rpg {
             }
 
             #[derive(Debug, Deserialize, Serialize)]
+            #[serde(deny_unknown_fields)]
             pub struct Graphic {
                 pub tile_id: i32,
                 pub character_name: String,
@@ -85,6 +236,7 @@ pub mod rpg {
             }
 
             #[derive(Debug, Deserialize)]
+            #[serde(deny_unknown_fields)]
             pub struct Page {
                 pub condition: Condition,
                 pub graphic: Graphic,
@@ -103,6 +255,7 @@ pub mod rpg {
         }
 
         #[derive(Debug, Deserialize)]
+        #[serde(deny_unknown_fields)]
         pub struct Event {
             pub id: usize,
             pub name: String,
@@ -113,6 +266,7 @@ pub mod rpg {
     }
 
     #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
     pub struct MoveRoute {
         pub repeat: bool,
         pub skippable: bool,
@@ -120,25 +274,28 @@ pub mod rpg {
     }
 
     #[derive(Debug, Deserialize, Serialize)]
+    #[serde(deny_unknown_fields)]
     pub struct AudioFile {
         pub name: String,
         pub volume: u8,
         pub pitch: u8,
     }
 
+    type Parameter = alox_48::Value;
+
     #[derive(Debug, Deserialize)]
-    #[allow(missing_docs)]
+    #[serde(deny_unknown_fields)]
     pub struct EventCommand {
         pub code: i32,
         pub indent: usize,
-        pub parameters: Vec<alox_48::Value>,
+        pub parameters: Vec<Parameter>,
     }
 
     #[derive(Debug, Deserialize)]
-    #[allow(missing_docs)]
+    #[serde(deny_unknown_fields)]
     pub struct MoveCommand {
         pub code: i32,
-        pub parameters: Vec<alox_48::Value>,
+        pub parameters: Vec<Parameter>,
     }
 }
 

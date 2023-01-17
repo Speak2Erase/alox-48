@@ -43,7 +43,7 @@ impl<'de> Deserialize<'de> for Value {
                 Ok(Value::Bool(v))
             }
 
-            fn visit_i128<E>(self, v: i128) -> Result<Self::Value, E>
+            fn visit_i64<E>(self, v: i64) -> Result<Self::Value, E>
             where
                 E: serde::de::Error,
             {
@@ -124,7 +124,7 @@ impl<'de> Deserialize<'de> for Value {
                 A: serde::de::MapAccess<'de>,
             {
                 let de = serde::de::value::MapAccessDeserializer::new(fields);
-                let fields = RbHash::deserialize(de)?;
+                let fields = indexmap::IndexMap::deserialize(de)?;
                 Ok(Value::Object(Object {
                     class: class.to_string(),
                     fields,
