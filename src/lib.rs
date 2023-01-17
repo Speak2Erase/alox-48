@@ -1,6 +1,13 @@
 #![warn(rust_2018_idioms, clippy::all)]
 #![feature(min_specialization)]
 
+//! alox-48
+//! (short for aluminum oxide 48)
+//!
+//! alox-48 is a crate using serde designed to deserialize ruby marshal data.
+//! It uses the currently nightly feature `min_specialization` to extend serde's data model,
+//! preventing the loss of information in (de)serialization.
+
 // Copyright (C) 2022 Lily Lyons
 //
 // This file is part of alox-48.
@@ -18,17 +25,26 @@
 // You should have received a copy of the GNU General Public License
 // along with alox-48.  If not, see <http://www.gnu.org/licenses/>.
 
+/// Deserialization via marshal.
+///
+/// [`de::extension::VisitorExt`] is responsible for extending serde.
 pub mod de;
+/// Error type.
 pub mod error;
+/// Serialization **(WIP!)**
 pub mod ser;
-
+/// Untyped ruby values and rust equivalents of some ruby types (Hash, Array, etc).
+///
+/// Useful for deserializing untyped data.
 pub mod value;
 
-pub use de::Deserializer;
+pub use de::{Deserializer, VisitorExt};
 pub use error::{Error, Result};
 pub use ser::{to_bytes, Serializer};
-pub use value::Value;
+pub use value::{Object, RbArray, RbHash, RbString, Userdata, Value};
 
+/// Deserialize data from some bytes.
+/// It's a convenience function over [`Deserializer::new`] and [`serde::Deserialize`].
 pub fn from_bytes<'de, T>(data: &'de [u8]) -> Result<T>
 where
     T: serde::Deserialize<'de>,

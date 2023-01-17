@@ -21,42 +21,97 @@ mod impls;
 mod ser;
 
 use enum_as_inner::EnumAsInner;
+use indexmap::IndexMap;
 use std::hash::Hash;
 
-use indexmap::IndexMap;
+/// An enum representing any ruby value.
+/// Similar to [`serde_json::Value`] and the like.
+///
+/// Value is designed to use [`crate::VisitorExt`] extensively to avoid loss of information in the deserialization process.
+/// Userdata/Object, for example, store the class name, which is not something that would normally be possible in serde.
 #[derive(Default, Debug, Clone, EnumAsInner)]
 pub enum Value {
+    /// A value equivalent to nil in ruby (or [`()`] in rust.)
     #[default]
     Nil,
+    /// A boolean value.
     Bool(bool),
+    /// A float value.
     Float(f64),
+    /// An integer value.
     Integer(i64),
+    /// A ruby string.
+    /// Because strings in ruby are not guarenteed to be utf8, [`RbString`] stores a [`Vec<u8>`] instead.
+    ///
+    /// See [`RbString`] for more information.
     String(RbString),
+    /// A symbol from ruby.
+    /// It's a newtype around a String, meant to preserve types during (de)serialization.
+    /// See [`Symbol`] for more information.
     Symbol(Symbol),
+    /// An array of [`Value`].
     Array(RbArray),
+    /// Equivalent to a Hash in Ruby.
     Hash(RbHash),
+    /// An object serialized by `_dump`.
     Userdata(Userdata),
+    /// A generic ruby object.
     Object(Object),
 }
 
+/// This type represents types serialized with `_dump` from ruby.
+/// Its main intended use is in [`Value`], but you can also use it with [`serde::Deserialize`]:
+///
+/// ```
+/// #[derive(serde::Deserialize)]
+/// #[serde(from = "alox_48::Userdata")]
+/// struct MyUserData {
+///     field: [char; 4],
+/// }
+///
+/// impl From<alox_48::Userdata> for MyUserData {
+///     fn from(value: alox_48::Userdata) -> Self {
+///         assert_eq!("MyUserData", value.class.to_string());
+///         let field = std::array::from_fn(|i| {
+///             value.data[i] as char
+///         });
+///
+///         Self {
+///             field
+///         }
+///     }
+/// }
+/// ```
 #[derive(Hash, PartialEq, Eq, Default, Debug, Clone)]
 pub struct Userdata {
-    pub class: String,
+    pub class: Symbol,
     pub data: Vec<u8>,
 }
 
+/// A type equivalent to ruby's `Object`.
+/// What more needs to be said?
 #[derive(PartialEq, Eq, Default, Debug, Clone)]
 pub struct Object {
-    pub class: String,
+    pub class: Symbol,
     pub fields: RbFields,
 }
 
+/// A type equivalent to ruby's `String`.
+/// ruby strings do not have to be utf8 encoded, so this type uses [`Vec<u8>`] instead.
+///
+/// ruby strings also can have attached extra fields (usually just the encoding), and this struct is no exception.
+/// An [`RbString`] constructed from a rust [`String`] will always have the field `:E` set to true, which is how
+/// ruby denotes that a string is utf8.
 #[derive(PartialEq, Eq, Default, Debug, Clone)]
 pub struct RbString {
     pub data: Vec<u8>,
     pub fields: RbFields,
 }
 
+/// A symbol from ruby.
+/// It's a newtype around a String, meant to preserve types during (de)serialization.
+///
+/// When serializing, a [`String`] will be serialized as a String, but a [`Symbol`] will be serialized as a Symbol.
 #[derive(Hash, PartialEq, Eq, Default, Debug, Clone)]
 pub struct Symbol(pub String);
 
@@ -152,6 +207,11 @@ impl Hash for Value {
     }
 }
 
+/// Shorthand type alias for a ruby array.
 pub type RbArray = Vec<Value>;
+/// Shorthand type alias for a ruby hash.
 pub type RbHash = IndexMap<Value, Value>;
+
+/// A type alias used to represent fields of objects.
+/// All objects store a [`Symbol`] to represent the key for instance variable, and we do that here too.
 pub type RbFields = IndexMap<Symbol, Value>;

@@ -20,19 +20,46 @@ use serde::de::{MapAccess, Unexpected, Visitor};
 
 use crate::value::RbFields;
 
+/// This trait is responsible for handling types from ruby's marshal format that do not map well to serde's data model.
+/// Most functions here forward to the closest serde function by default.
+/// Some functions, such as [`VisitorExt::visit_userdata`] by default do **not** forward to anything at all and instead error.
+///
+/// This trait only works with alox48.
 pub trait VisitorExt<'de>: Visitor<'de> {
+    /// For deserializing objects serialized via `_dump` in ruby.
+    /// The class name is passed in as well as the relevant data.
+    ///
+    /// Errors by default.
     fn visit_userdata<E>(self, class: &'de str, data: &'de [u8]) -> Result<Self::Value, E>
     where
         E: SerdeError;
 
+    /// For deserializing ruby objects in general.
+    /// It's different to how deserializing structs normally works in serde, as you get a class name.
+    ///
+    /// Forwards to [`Visitor::visit_map`] by default.
     fn visit_object<A>(self, class: &'de str, fields: A) -> Result<Self::Value, A::Error>
     where
         A: MapAccess<'de>;
 
+    /// For deserializing ruby symbols.
+    /// Only exists to distinguish between strings and symbols.
+    ///
+    /// Forwards to [`Visitor::visit_borrowed_str`] by default.
     fn visit_symbol<E>(self, sym: &'de str) -> Result<Self::Value, E>
     where
         E: SerdeError;
 
+    /// For deserializing ruby strings which may or may not be utf8.
+    /// You will also get any extra fields attached to the string, like the encoding (as that is a thing in ruby)
+    ///
+    /// By default, it uses [`String::from_utf8_lossy`] and matches the resulting [`std::borrow::Cow`] like this:
+    /// ```
+    /// match str {
+    ///     std::borrow::Cow::Borrowed(str) => self.visit_borrowed_str(str),
+    ///     std::borrow::Cow::Owned(str) => self.visit_string(str),
+    /// }
+    /// ```
     fn visit_ruby_string<E>(self, str: &'de [u8], fields: RbFields) -> Result<Self::Value, E>
     where
         E: SerdeError;
@@ -83,6 +110,7 @@ where
     }
 }
 
+/// Default implementation for VisitorExt.
 impl<'de> VisitorExt<'de> for serde::de::IgnoredAny {
     fn visit_userdata<E>(self, _class: &'de str, _data: &'de [u8]) -> Result<Self::Value, E>
     where

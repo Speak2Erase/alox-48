@@ -126,7 +126,7 @@ impl<'de> Deserialize<'de> for Value {
                 let de = serde::de::value::MapAccessDeserializer::new(fields);
                 let fields = RbFields::deserialize(de)?;
                 Ok(Value::Object(Object {
-                    class: class.to_string(),
+                    class: class.into(),
                     fields,
                 }))
             }
@@ -136,7 +136,7 @@ impl<'de> Deserialize<'de> for Value {
                 E: serde::de::Error,
             {
                 Ok(Value::Userdata(Userdata {
-                    class: class.to_string(),
+                    class: class.into(),
                     data: data.to_vec(),
                 }))
             }
@@ -281,7 +281,7 @@ impl<'de> Deserialize<'de> for Object {
                 let de = serde::de::value::MapAccessDeserializer::new(fields);
                 let fields = RbFields::deserialize(de)?;
                 Ok(Object {
-                    class: class.to_string(),
+                    class: class.into(),
                     fields,
                 })
             }
@@ -312,7 +312,7 @@ impl<'de> Deserialize<'de> for Userdata {
                 E: serde::de::Error,
             {
                 Ok(Userdata {
-                    class: class.to_string(),
+                    class: class.into(),
                     data: data.to_vec(),
                 })
             }

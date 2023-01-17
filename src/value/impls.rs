@@ -15,9 +15,13 @@
 // You should have received a copy of the GNU General Public License
 // along with alox-48.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::{borrow::Cow, string::FromUtf8Error};
+use std::{
+    borrow::Cow,
+    ops::{Deref, DerefMut},
+    string::FromUtf8Error,
+};
 
-use super::RbString;
+use super::{RbString, Symbol};
 
 impl RbString {
     pub fn to_string_lossy(&self) -> Cow<'_, str> {
@@ -26,5 +30,37 @@ impl RbString {
 
     pub fn to_string(self) -> Result<String, FromUtf8Error> {
         String::from_utf8(self.data)
+    }
+}
+
+impl PartialEq<&str> for Symbol {
+    fn eq(&self, other: &&str) -> bool {
+        self.0 == *other
+    }
+}
+
+impl PartialEq<String> for Symbol {
+    fn eq(&self, other: &String) -> bool {
+        &self.0 == other
+    }
+}
+
+impl PartialEq<str> for Symbol {
+    fn eq(&self, other: &str) -> bool {
+        self.0 == other
+    }
+}
+
+impl Deref for Symbol {
+    type Target = String;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for Symbol {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
     }
 }
