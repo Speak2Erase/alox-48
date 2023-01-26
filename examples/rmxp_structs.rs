@@ -93,13 +93,12 @@ impl From<alox_48::Value> for ParameterType {
                                     .map(Into::into)
                                     .collect(),
                             }
-                            .into()
                         })
                         .collect(),
                 })
             }
-            Value::Object(obj) if obj.class == "RPG::MoveCommand" => Self::MoveCommand(
-                rpg::MoveCommand {
+            Value::Object(obj) if obj.class == "RPG::MoveCommand" => {
+                Self::MoveCommand(rpg::MoveCommand {
                     code: obj.fields[symbol!("code")].clone().into_integer().unwrap() as _,
                     parameters: obj.fields[symbol!("parameters")]
                         .clone()
@@ -108,13 +107,11 @@ impl From<alox_48::Value> for ParameterType {
                         .into_iter()
                         .map(Into::into)
                         .collect(),
-                }
-                .into(),
-            ),
+                })
+            }
             Value::Float(f) => Self::Float(f as _),
             Value::Array(ary) => Self::Array(
-                ary.clone()
-                    .into_iter()
+                ary.into_iter()
                     .map(|v| v.into_string().unwrap().to_string_lossy().into_owned())
                     .collect(),
             ),
