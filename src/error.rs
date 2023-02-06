@@ -15,10 +15,28 @@
 // You should have received a copy of the GNU General Public License
 // along with alox-48.  If not, see <http://www.gnu.org/licenses/>.
 
+use std::str::Utf8Error;
+
+use crate::tag::Tag;
+
 pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("Unexpected negative length {0}")]
+    UnexpectedNegativeLength(i32),
+    #[error("Wrong tag {0}")]
+    WrongTag(u8),
+    #[error("Symbol is invalid utf8 {0}")]
+    SymbolInvalidUTF8(Utf8Error),
+    #[error("Unresolved symlink {0}")]
+    UnresolvedSymlink(usize),
+    #[error("Float mantissa too long")]
+    ParseFloatMantissaTooLong,
+    #[error("Expected a symbol got {0:?}")]
+    ExpectedSymbol(Tag),
+    #[error("End of file")]
+    Eof,
     #[error("Serde error: {0}")]
     Message(String),
 }

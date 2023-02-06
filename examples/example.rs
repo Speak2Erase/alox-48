@@ -5,12 +5,15 @@ use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
 struct MyClass {
+    #[serde(alias = "@test")]
     test: Test,
+    #[serde(alias = "@bool")]
     bool: bool,
 }
 
 #[derive(Debug, Deserialize)]
 struct Test {
+    #[serde(alias = "@map")]
     map: HashMap<String, bool>,
 }
 
@@ -31,7 +34,7 @@ end
 class Test
     def initialize()
         @map = {
-            "@test" => true
+            :test => true
         }
     end
 end

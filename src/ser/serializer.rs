@@ -18,7 +18,7 @@
 
 use serde::ser;
 
-pub fn to_bytes<T>(data: T) -> Result<Vec<u8>, super::Error>
+pub fn to_bytes<T>(data: T) -> Result<Vec<u8>, crate::Error>
 where
     T: serde::Serialize,
 {
@@ -41,7 +41,7 @@ impl Serializer {
 impl<'a> ser::Serializer for &'a mut Serializer {
     type Ok = ();
 
-    type Error = super::Error;
+    type Error = crate::Error;
 
     type SerializeSeq = Self;
 
@@ -217,7 +217,7 @@ impl<'a> ser::Serializer for &'a mut Serializer {
 impl<'a> ser::SerializeMap for &'a mut Serializer {
     type Ok = ();
 
-    type Error = super::Error;
+    type Error = crate::Error;
 
     fn serialize_key<T: ?Sized>(&mut self, key: &T) -> Result<(), Self::Error>
     where
@@ -241,7 +241,7 @@ impl<'a> ser::SerializeMap for &'a mut Serializer {
 impl<'a> ser::SerializeSeq for &'a mut Serializer {
     type Ok = ();
 
-    type Error = super::Error;
+    type Error = crate::Error;
 
     fn serialize_element<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
     where
@@ -258,7 +258,7 @@ impl<'a> ser::SerializeSeq for &'a mut Serializer {
 impl<'a> ser::SerializeStruct for &'a mut Serializer {
     type Ok = ();
 
-    type Error = super::Error;
+    type Error = crate::Error;
 
     fn serialize_field<T: ?Sized>(
         &mut self,
@@ -279,7 +279,7 @@ impl<'a> ser::SerializeStruct for &'a mut Serializer {
 impl<'a> ser::SerializeStructVariant for &'a mut Serializer {
     type Ok = ();
 
-    type Error = super::Error;
+    type Error = crate::Error;
 
     fn serialize_field<T: ?Sized>(
         &mut self,
@@ -300,7 +300,7 @@ impl<'a> ser::SerializeStructVariant for &'a mut Serializer {
 impl<'a> ser::SerializeTuple for &'a mut Serializer {
     type Ok = ();
 
-    type Error = super::Error;
+    type Error = crate::Error;
 
     fn serialize_element<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
     where
@@ -317,7 +317,7 @@ impl<'a> ser::SerializeTuple for &'a mut Serializer {
 impl<'a> ser::SerializeTupleStruct for &'a mut Serializer {
     type Ok = ();
 
-    type Error = super::Error;
+    type Error = crate::Error;
 
     fn serialize_field<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
     where
@@ -334,7 +334,7 @@ impl<'a> ser::SerializeTupleStruct for &'a mut Serializer {
 impl<'a> ser::SerializeTupleVariant for &'a mut Serializer {
     type Ok = ();
 
-    type Error = super::Error;
+    type Error = crate::Error;
 
     fn serialize_field<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
     where

@@ -5,9 +5,7 @@ edition = "2021"
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
-nom = "7"
-num-traits = "0.2"
-enum-as-inner = "0.5.1"
+enum-as-inner = "0.5"
 indexmap = { version = "1.9", features = ["serde"] }
 thiserror = "1.0"
 
@@ -15,4 +13,3 @@ thiserror = "1.0"
 pretty-hex = "0.3.0"
 color-eyre = "0.6.2"
 bytemuck = "1.12.3"
-serde_path_to_error = "0.1"

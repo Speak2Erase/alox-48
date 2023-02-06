@@ -17,6 +17,7 @@
 
 use std::{
     borrow::Cow,
+    fmt::Display,
     ops::{Deref, DerefMut},
     string::FromUtf8Error,
 };
@@ -33,21 +34,35 @@ impl RbString {
     }
 }
 
-impl PartialEq<&str> for Symbol {
-    fn eq(&self, other: &&str) -> bool {
-        self.0 == *other
+impl Deref for RbString {
+    type Target = Vec<u8>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.data
     }
 }
 
-impl PartialEq<String> for Symbol {
-    fn eq(&self, other: &String) -> bool {
-        &self.0 == other
+impl DerefMut for RbString {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.data
     }
 }
 
-impl PartialEq<str> for Symbol {
-    fn eq(&self, other: &str) -> bool {
-        self.0 == other
+impl<T> PartialEq<T> for RbString
+where
+    T: AsRef<[u8]>,
+{
+    fn eq(&self, other: &T) -> bool {
+        self.data.as_slice() == other.as_ref()
+    }
+}
+
+impl<T> PartialEq<T> for Symbol
+where
+    T: AsRef<str>,
+{
+    fn eq(&self, other: &T) -> bool {
+        self.0 == other.as_ref()
     }
 }
 
@@ -56,6 +71,12 @@ impl Deref for Symbol {
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+impl Display for Symbol {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!(":{}", self.0))
     }
 }
 

@@ -131,6 +131,16 @@ impl TryInto<Userdata> for Value {
     }
 }
 
+impl From<Value> for bool {
+    fn from(value: Value) -> Self {
+        match value {
+            Value::Nil => false,
+            Value::Bool(b) => b,
+            _ => true,
+        }
+    }
+}
+
 impl From<String> for Symbol {
     fn from(value: String) -> Self {
         Self(value)

@@ -25,6 +25,8 @@
 // You should have received a copy of the GNU General Public License
 // along with alox-48.  If not, see <http://www.gnu.org/licenses/>.
 
+pub(crate) mod tag;
+
 /// Deserialization via marshal.
 ///
 /// [`de::extension::VisitorExt`] is responsible for extending serde.
@@ -40,7 +42,7 @@ pub mod value;
 
 pub use de::{Deserializer, VisitorExt};
 pub use error::{Error, Result};
-pub use ser::{to_bytes, Serializer};
+pub use ser::{to_bytes, SerializeExt, Serializer};
 pub use value::{Object, RbArray, RbHash, RbString, Userdata, Value};
 
 /// Deserialize data from some bytes.
