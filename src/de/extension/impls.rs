@@ -52,12 +52,32 @@ where
     default fn visit_ruby_string<E>(
         self,
         str: &'de [u8],
-        _fields: RbFields,
+        fields: RbFields,
     ) -> Result<Self::Value, E>
     where
         E: SerdeError,
     {
         let str = String::from_utf8_lossy(str);
+
+        use crate::Value;
+        match fields.get("E") {
+            Some(f) => match f {
+                Value::Bool(b) if !*b => {
+                    eprintln!("warning: converting ascii ruby string to utf8")
+                }
+                Value::Bool(b) if *b => {}
+                Value::String(s) => {
+                    eprintln!(
+                        "warning: converting non-utf8 ruby string to utf8: {}",
+                        s.to_string_lossy()
+                    )
+                }
+                v => eprintln!("warning: unexpected encoding type on ruby string: {v:?}"),
+            },
+            None => eprintln!(
+                "warning: converting ruby string with no encoding (likely binary data) to utf8"
+            ),
+        }
 
         match str {
             std::borrow::Cow::Borrowed(str) => self.visit_borrowed_str(str),

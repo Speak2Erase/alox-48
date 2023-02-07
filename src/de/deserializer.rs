@@ -16,12 +16,11 @@
 // along with alox-48.  If not, see <http://www.gnu.org/licenses/>.
 #![allow(dead_code, unused_variables)]
 
-use std::borrow::Cow;
-
 use serde::de;
 use serde::de::MapAccess;
 use serde::de::SeqAccess;
 use serde::forward_to_deserialize_any;
+use serde::Deserialize;
 
 use super::VisitorExt;
 use crate::tag::Tag;
@@ -206,7 +205,14 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
 
                 visitor.visit_f64(self.read_float()?)
             }
-            Tag::String => todo!(),
+            Tag::String => {
+                self.next_byte()?;
+
+                let len = self.read_packed_int()? as _;
+                let bytes = self.next_bytes_dyn(len)?;
+
+                visitor.visit_ruby_string(bytes, Default::default())
+            }
             Tag::Array => {
                 self.next_byte()?;
 
@@ -241,7 +247,31 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
 
                 visitor.visit_symbol(self.read_symlink()?)
             }
-            Tag::Instance => todo!(),
+            Tag::Instance => {
+                self.next_byte()?;
+
+                match self.next_tag()? {
+                    Tag::String => {
+                        let len = self.read_packed_int()? as _;
+                        let bytes = self.next_bytes_dyn(len)?;
+
+                        let len = self.read_packed_int()? as _;
+                        let mut fields = indexmap::IndexMap::new();
+                        fields.reserve(len);
+
+                        for i in 0..(len) {
+                            let key = crate::value::Symbol::deserialize(&mut *self)?;
+                            let value = crate::Value::deserialize(&mut *self)?;
+
+                            fields.insert(key, value);
+                        }
+
+                        visitor.visit_ruby_string(bytes, fields)
+                    }
+                    Tag::ObjectLink => todo!(),
+                    t => Err(Error::WrongTag(t as _)),
+                }
+            }
             Tag::RawRegexp => unimplemented!(),
             Tag::ClassRef => unimplemented!(),
             Tag::ModuleRef => unimplemented!(),

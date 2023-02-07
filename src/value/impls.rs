@@ -16,8 +16,8 @@
 // along with alox-48.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::{
-    borrow::Cow,
-    fmt::Display,
+    borrow::{Borrow, Cow},
+    fmt::{Debug, Display},
     ops::{Deref, DerefMut},
     string::FromUtf8Error,
 };
@@ -25,12 +25,25 @@ use std::{
 use super::{RbString, Symbol};
 
 impl RbString {
+    pub fn encoding(&self) -> Option<&crate::Value> {
+        self.fields.get("E")
+    }
+
     pub fn to_string_lossy(&self) -> Cow<'_, str> {
         String::from_utf8_lossy(&self.data)
     }
 
     pub fn to_string(self) -> Result<String, FromUtf8Error> {
         String::from_utf8(self.data)
+    }
+}
+
+impl Debug for RbString {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RbString")
+            .field("data", &self.to_string_lossy())
+            .field("fields", &self.fields)
+            .finish()
     }
 }
 
@@ -54,6 +67,12 @@ where
 {
     fn eq(&self, other: &T) -> bool {
         self.data.as_slice() == other.as_ref()
+    }
+}
+
+impl Borrow<[u8]> for RbString {
+    fn borrow(&self) -> &[u8] {
+        self
     }
 }
 
@@ -83,5 +102,11 @@ impl Display for Symbol {
 impl DerefMut for Symbol {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
+    }
+}
+
+impl Borrow<str> for Symbol {
+    fn borrow(&self) -> &str {
+        self
     }
 }

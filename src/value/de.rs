@@ -147,6 +147,20 @@ impl<'de> Deserialize<'de> for Value {
             {
                 Ok(Value::Symbol(sym.into()))
             }
+
+            fn visit_ruby_string<E>(
+                self,
+                str: &'de [u8],
+                fields: RbFields,
+            ) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(Value::String(RbString {
+                    data: str.to_vec(),
+                    fields,
+                }))
+            }
         }
 
         deserializer.deserialize_any(ValueVisitor)

@@ -62,6 +62,7 @@ pub trait VisitorExt<'de>: Visitor<'de> {
     ///     std::borrow::Cow::Owned(str) => self.visit_string(str),
     /// }
     /// ```
+    /// FIXME: Change fields to a [`serde::de::MapAccess`]
     fn visit_ruby_string<E>(self, str: &'de [u8], fields: RbFields) -> Result<Self::Value, E>
     where
         E: SerdeError;

@@ -4,7 +4,7 @@ use std::process::Command;
 fn main() {
     color_eyre::install().unwrap();
 
-    Command::new("ruby")
+    let data = Command::new("ruby")
         .arg("-e")
         .arg(
             r#"
@@ -18,25 +18,18 @@ fn main() {
             class Test
                 def initialize()
                     @map = {
-                        :abc => true
+                        "abc" => true
                     }
                 end
             end
                 
             klass = MyClass.new
-            Marshal.dump(klass, File.open("value.marshal", "wb"))
+            puts Marshal.dump(klass)
         "#,
         )
-        .status()
-        .unwrap();
-
-    let data = std::fs::read("value.marshal").unwrap();
-
-    assert_eq!(
-        data[0..=1],
-        [4, 8],
-        "The data should have version number 4.8"
-    );
+        .output()
+        .unwrap()
+        .stdout;
 
     println!("{}", pretty_hex::pretty_hex(&data));
 

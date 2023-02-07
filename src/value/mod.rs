@@ -102,7 +102,7 @@ pub struct Object {
 /// ruby strings also can have attached extra fields (usually just the encoding), and this struct is no exception.
 /// An [`RbString`] constructed from a rust [`String`] will always have the field `:E` set to true, which is how
 /// ruby denotes that a string is utf8.
-#[derive(PartialEq, Eq, Default, Debug, Clone)]
+#[derive(PartialEq, Eq, Default, Clone)]
 pub struct RbString {
     pub data: Vec<u8>,
     pub fields: RbFields,
