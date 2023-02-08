@@ -224,7 +224,6 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
         ) {
             self.register_obj();
         }
-        println!("{:?}", self.peek_tag()?);
 
         match self.next_tag()? {
             Tag::Nil => visitor.visit_unit(),

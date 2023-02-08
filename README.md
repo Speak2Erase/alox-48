@@ -1,6 +1,6 @@
 # alox-48
 
-alox-48 (short for aluminum oxide 48) is a crate for deserializing (soon serializing as well) RUby's Marshal data format, using serde.
+alox-48 (short for aluminum oxide 48) is a crate for deserializing (soon serializing as well) Ruby's Marshal data format, using serde.
 It requires rust nightly as of 2/8/23 for `min-specialization`.
 
 alox-48 intends to provide almost perfect round-trip deserialization, with some exceptions:
