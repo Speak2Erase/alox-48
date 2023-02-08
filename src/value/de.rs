@@ -23,6 +23,7 @@ use crate::value::{Object, RbArray, RbFields, RbHash, RbString, Userdata};
 use super::{Symbol, Value};
 
 impl<'de> Deserialize<'de> for Value {
+    #[allow(clippy::too_many_lines)]
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,

@@ -27,6 +27,8 @@ macro_rules! utf8_enc {
 }
 
 impl Value {
+    /// Convert a symbol into a value.
+    #[must_use]
     pub fn from_symbol(symbol: String) -> Self {
         Self::Symbol(symbol.into())
     }

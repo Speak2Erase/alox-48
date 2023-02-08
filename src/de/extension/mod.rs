@@ -29,6 +29,7 @@ pub trait VisitorExt<'de>: Visitor<'de> {
     /// For deserializing objects serialized via `_dump` in ruby.
     /// The class name is passed in as well as the relevant data.
     ///
+    /// # Errors
     /// Errors by default.
     fn visit_userdata<E>(self, class: &'de str, data: &'de [u8]) -> Result<Self::Value, E>
     where
@@ -38,6 +39,7 @@ pub trait VisitorExt<'de>: Visitor<'de> {
     /// It's different to how deserializing structs normally works in serde, as you get a class name.
     ///
     /// Forwards to [`Visitor::visit_map`] by default.
+    #[allow(clippy::missing_errors_doc)]
     fn visit_object<A>(self, class: &'de str, fields: A) -> Result<Self::Value, A::Error>
     where
         A: MapAccess<'de>;
@@ -46,6 +48,7 @@ pub trait VisitorExt<'de>: Visitor<'de> {
     /// Only exists to distinguish between strings and symbols.
     ///
     /// Forwards to [`Visitor::visit_borrowed_str`] by default.
+    #[allow(clippy::missing_errors_doc)]
     fn visit_symbol<E>(self, sym: &'de str) -> Result<Self::Value, E>
     where
         E: SerdeError;
@@ -60,6 +63,7 @@ pub trait VisitorExt<'de>: Visitor<'de> {
     ///     std::borrow::Cow::Owned(str) => self.visit_string(str),
     /// }
     /// ```
+    #[allow(clippy::missing_errors_doc)]
     fn visit_ruby_string<A>(self, str: &'de [u8], fields: A) -> Result<Self::Value, A::Error>
     where
         A: MapAccess<'de>;

@@ -27,14 +27,15 @@ where
     Ok(serializer.output)
 }
 
-#[derive(Default)]
+#[derive(Default, Debug, Clone)]
 pub struct Serializer {
     output: Vec<u8>,
 }
 
 impl Serializer {
+    #[must_use]
     pub fn new() -> Self {
-        Default::default()
+        Serializer::default()
     }
 }
 

@@ -2,6 +2,9 @@
 name = "alox-48"
 version = "0.1.0"
 edition = "2021"
+authors = ["Lily Madeline Lyons"]
+repository = "https://github.com/Speak2Erase/alox-48"
+license = "GPL-3.0"
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }

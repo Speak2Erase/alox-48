@@ -14,7 +14,11 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with alox-48.  If not, see <http://www.gnu.org/licenses/>.
-#![allow(dead_code, unused_variables)]
+
+// These are necessary evils, sadly.
+#![allow(clippy::cast_sign_loss)]
+#![allow(clippy::cast_possible_wrap)]
+#![allow(clippy::cast_lossless)]
 
 use std::collections::BTreeSet;
 
@@ -28,6 +32,8 @@ use crate::tag::Tag;
 use crate::Error;
 use crate::Result;
 
+/// The alox-48 deserializer.
+#[derive(Debug, Clone)]
 pub struct Deserializer<'de> {
     input: &'de [u8],
     objtable: Vec<&'de [u8]>,
@@ -38,6 +44,13 @@ pub struct Deserializer<'de> {
 }
 
 impl<'de> Deserializer<'de> {
+    /// Create a new deserializer with the given input.
+    ///
+    /// # Errors
+    /// Will error if the input has a len < 1.
+    ///
+    /// Will error if the input has a version number != to 4.8.
+    /// The first two bytes of marshal data encode the version number. [major, minor]
     pub fn new(input: &'de [u8]) -> crate::Result<Self> {
         if input.len() < 2 {
             return Err(Error::Eof);
@@ -76,14 +89,6 @@ impl<'de> Deserializer<'de> {
         self.next_byte()?.try_into()
     }
 
-    fn next_bytes<const N: usize>(&mut self) -> Result<[u8; N]> {
-        let mut ret = [0u8; N];
-        for spot in &mut ret {
-            *spot = self.next_byte()?;
-        }
-        Ok(ret)
-    }
-
     fn next_bytes_dyn(&mut self, length: usize) -> Result<&'de [u8]> {
         if length > self.input.len() {
             return Result::Err(Error::Eof);
@@ -117,6 +122,7 @@ impl<'de> Deserializer<'de> {
         })
     }
 
+    #[allow(clippy::panic_in_result_fn)]
     fn read_float(&mut self) -> Result<f64> {
         let raw_length = self.read_packed_int()?;
         let length = raw_length
@@ -156,7 +162,7 @@ impl<'de> Deserializer<'de> {
         };
 
         if self.remove_ivar_prefix {
-            str = &str[1..]
+            str = &str[1..];
         }
 
         if self.stack.is_empty() {
@@ -183,10 +189,6 @@ impl<'de> Deserializer<'de> {
         }
     }
 
-    fn register_blacklisted(&mut self, input: &'de [u8]) {
-        self.blacklisted_objects.insert(input);
-    }
-
     fn is_blacklisted(&mut self, slice: &'de [u8]) -> bool {
         self.blacklisted_objects.contains(slice)
     }
@@ -203,6 +205,9 @@ impl<'de> Deserializer<'de> {
 impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     type Error = Error;
 
+    // This is just barely over the limit.
+    // It's fine, I swear.
+    #[allow(clippy::too_many_lines)]
     fn deserialize_any<V>(self, visitor: V) -> Result<V::Value>
     where
         V: VisitorExt<'de>,
@@ -260,8 +265,6 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
                     remove_ivar_prefix: false,
                 })
             }
-            // FIXME: Account for this
-            Tag::HashDefault => todo!(),
             Tag::Symbol => visitor.visit_symbol(self.read_symbol()?),
             Tag::Symlink => visitor.visit_symbol(self.read_symlink()?),
             Tag::Instance => match self.next_tag()? {
@@ -281,8 +284,10 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
                         },
                     )
                 }
-                Tag::ObjectLink => todo!(),
-                t => Err(Error::WrongTag(t as _)),
+                // This should work.
+                // I think.
+                // Denial is always the best solution. :)
+                _ => self.deserialize_any(visitor),
             },
             Tag::Object => {
                 let class = self.read_symbol_either()?;
@@ -325,6 +330,8 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
                 visitor.visit_userdata(class, data)
             }
 
+            // FIXME: Account for this
+            Tag::HashDefault => Err(Error::Unsupported("Hash with default value")),
             Tag::UserClass => Err(Error::Unsupported(
                 "User class (class inheriting from a default ruby class)",
             )), // FIXME: make this forward to newtype

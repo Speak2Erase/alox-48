@@ -19,6 +19,7 @@ use serde::Serialize;
 
 use crate::Value;
 
+#[allow(clippy::panic_in_result_fn)]
 impl Serialize for Value {
     fn serialize<S>(&self, _serializer: S) -> Result<S::Ok, S::Error>
     where

@@ -67,14 +67,14 @@ where
             match fields.get("E").or_else(|| fields.get("encoding")) {
                 Some(f) => match f {
                     Value::Bool(b) if !*b => {
-                        eprintln!("warning: converting ascii ruby string to utf8")
+                        eprintln!("warning: converting ascii ruby string to utf8");
                     }
                     Value::Bool(b) if *b => {}
                     Value::String(s) => {
                         eprintln!(
                             "warning: converting non-utf8 ruby string to utf8: {}",
                             s.to_string_lossy()
-                        )
+                        );
                     }
                     v => eprintln!("warning: unexpected encoding type on ruby string: {v:?}"),
                 },
@@ -93,7 +93,7 @@ where
     }
 }
 
-/// Default implementation for VisitorExt.
+/// Default implementation for [`VisitorExt`].
 impl<'de> VisitorExt<'de> for serde::de::IgnoredAny {
     fn visit_userdata<E>(self, _class: &'de str, _data: &'de [u8]) -> Result<Self::Value, E>
     where

@@ -1,4 +1,12 @@
-#![warn(rust_2018_idioms, clippy::all)]
+#![warn(rust_2018_idioms, clippy::pedantic)]
+#![warn(
+    missing_docs,
+    missing_debug_implementations,
+    missing_copy_implementations,
+    clippy::panic,
+    clippy::panic_in_result_fn,
+    clippy::panicking_unwrap
+)]
 #![feature(min_specialization)]
 
 //! alox-48
@@ -47,6 +55,7 @@ pub use value::{Object, RbArray, RbHash, RbString, Userdata, Value};
 
 /// Deserialize data from some bytes.
 /// It's a convenience function over [`Deserializer::new`] and [`serde::Deserialize`].
+#[allow(clippy::missing_errors_doc)]
 pub fn from_bytes<'de, T>(data: &'de [u8]) -> Result<T>
 where
     T: serde::Deserialize<'de>,

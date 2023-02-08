@@ -14,6 +14,7 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with alox-48.  If not, see <http://www.gnu.org/licenses/>.
+#![allow(clippy::panic_in_result_fn, missing_docs, clippy::missing_errors_doc)]
 
 mod extension;
 mod serializer;

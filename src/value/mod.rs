@@ -84,7 +84,9 @@ pub enum Value {
 /// ```
 #[derive(Hash, PartialEq, Eq, Default, Debug, Clone)]
 pub struct Userdata {
+    /// Userdata class.
     pub class: Symbol,
+    /// Userdata data.
     pub data: Vec<u8>,
 }
 
@@ -92,7 +94,9 @@ pub struct Userdata {
 /// What more needs to be said?
 #[derive(PartialEq, Eq, Default, Debug, Clone)]
 pub struct Object {
+    /// This object's class.
     pub class: Symbol,
+    /// The fields on this object.
     pub fields: RbFields,
 }
 
@@ -115,7 +119,9 @@ impl Hash for Object {
 /// ruby denotes that a string is utf8.
 #[derive(PartialEq, Eq, Default, Clone)]
 pub struct RbString {
+    /// The data of this string.
     pub data: Vec<u8>,
+    /// Extra fields associated with this string.
     pub fields: RbFields,
 }
 
@@ -200,7 +206,6 @@ impl PartialEq for Value {
 impl Eq for Value {}
 
 impl Hash for Value {
-    // FIXME: add float impl
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         match self {
             Value::Nil => {}

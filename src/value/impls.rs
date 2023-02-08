@@ -25,14 +25,22 @@ use std::{
 use super::{RbString, Symbol};
 
 impl RbString {
+    #[must_use]
+    /// Return the encoding of this string, if it has one.
     pub fn encoding(&self) -> Option<&crate::Value> {
         self.fields.get("E").or_else(|| self.fields.get("encoding"))
     }
 
+    #[must_use]
+    /// Uses [`String::from_utf8_lossy`] to convert this string to rust string in a lossy manner.
     pub fn to_string_lossy(&self) -> Cow<'_, str> {
         String::from_utf8_lossy(&self.data)
     }
 
+    /// Tries to convert this string to a rust string.
+    ///
+    /// # Errors
+    /// Errors when this string is not valid utf8.
     pub fn to_string(self) -> Result<String, FromUtf8Error> {
         String::from_utf8(self.data)
     }
