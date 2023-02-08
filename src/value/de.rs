@@ -148,14 +148,17 @@ impl<'de> Deserialize<'de> for Value {
                 Ok(Value::Symbol(sym.into()))
             }
 
-            fn visit_ruby_string<E>(
+            fn visit_ruby_string<A>(
                 self,
                 str: &'de [u8],
-                fields: RbFields,
-            ) -> Result<Self::Value, E>
+                fields: A,
+            ) -> Result<Self::Value, A::Error>
             where
-                E: serde::de::Error,
+                A: serde::de::MapAccess<'de>,
             {
+                let de = serde::de::value::MapAccessDeserializer::new(fields);
+                let fields = RbFields::deserialize(de)?;
+
                 Ok(Value::String(RbString {
                     data: str.to_vec(),
                     fields,
@@ -253,14 +256,17 @@ impl<'de> Deserialize<'de> for RbString {
         }
 
         impl<'de> VisitorExt<'de> for StringVisitor {
-            fn visit_ruby_string<E>(
+            fn visit_ruby_string<A>(
                 self,
                 str: &'de [u8],
-                fields: RbFields,
-            ) -> Result<Self::Value, E>
+                fields: A,
+            ) -> Result<Self::Value, A::Error>
             where
-                E: serde::de::Error,
+                A: serde::de::MapAccess<'de>,
             {
+                let de = serde::de::value::MapAccessDeserializer::new(fields);
+                let fields = RbFields::deserialize(de)?;
+
                 Ok(RbString {
                     data: str.to_vec(),
                     fields,

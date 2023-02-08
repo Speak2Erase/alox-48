@@ -54,6 +54,14 @@ pub enum Tag {
     ObjectLink = b'@',
 
     UserDef = b'u',
+
+    Struct = b'S',
+
+    UserClass = b'C',
+
+    Extended = b'e',
+
+    UserMarshal = b'U',
 }
 
 impl TryFrom<u8> for Tag {
@@ -79,6 +87,10 @@ impl TryFrom<u8> for Tag {
             b'o' => Ok(Self::Object),
             b'@' => Ok(Self::ObjectLink),
             b'u' => Ok(Self::UserDef),
+            b'S' => Ok(Self::Struct),
+            b'C' => Ok(Self::UserClass),
+            b'e' => Ok(Self::Extended),
+            b'U' => Ok(Self::UserMarshal),
             _ => Err(crate::Error::WrongTag(value)),
         }
     }

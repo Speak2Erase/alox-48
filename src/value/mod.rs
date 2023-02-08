@@ -96,6 +96,17 @@ pub struct Object {
     pub fields: RbFields,
 }
 
+impl Hash for Object {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.class.hash(state);
+        self.fields.len().hash(state);
+        for (var, field) in self.fields.iter() {
+            var.hash(state);
+            field.hash(state);
+        }
+    }
+}
+
 /// A type equivalent to ruby's `String`.
 /// ruby strings do not have to be utf8 encoded, so this type uses [`Vec<u8>`] instead.
 ///
@@ -189,19 +200,26 @@ impl PartialEq for Value {
 impl Eq for Value {}
 
 impl Hash for Value {
+    // FIXME: add float impl
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         match self {
             Value::Nil => {}
             Value::Bool(b) => b.hash(state),
-            Value::Float(_) => {}
+            Value::Float(f) => f.to_bits().hash(state), // not the best but eh whos using a float as a hash key
             Value::Integer(i) => i.hash(state),
             Value::String(s) => {
                 s.data.hash(state);
             }
             Value::Symbol(s) => s.0.hash(state),
             Value::Array(v) => v.hash(state),
-            Value::Hash(_) => {}
-            Value::Object(_) => {}
+            Value::Hash(h) => {
+                h.len().hash(state);
+                for (key, value) in h.iter() {
+                    key.hash(state);
+                    value.hash(state);
+                }
+            }
+            Value::Object(o) => o.hash(state),
             Value::Userdata(u) => u.hash(state),
         }
     }

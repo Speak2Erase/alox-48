@@ -31,12 +31,18 @@ pub enum Error {
     SymbolInvalidUTF8(Utf8Error),
     #[error("Unresolved symlink {0}")]
     UnresolvedSymlink(usize),
+    #[error("Unresolved Object link {0}")]
+    UnresolvedObjectlink(usize),
     #[error("Float mantissa too long")]
     ParseFloatMantissaTooLong,
     #[error("Expected a symbol got {0:?}")]
     ExpectedSymbol(Tag),
+    #[error("Unsupported data encountered: {0}. This is probably because it does not map well to Rust's type system")]
+    Unsupported(&'static str),
     #[error("End of file")]
     Eof,
+    #[error("Version error, expected [4, 8], got {0:?}")]
+    VersionError([u8; 2]),
     #[error("Serde error: {0}")]
     Message(String),
 }

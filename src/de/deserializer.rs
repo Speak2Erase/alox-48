@@ -16,11 +16,12 @@
 // along with alox-48.  If not, see <http://www.gnu.org/licenses/>.
 #![allow(dead_code, unused_variables)]
 
+use std::collections::BTreeSet;
+
 use serde::de;
 use serde::de::MapAccess;
 use serde::de::SeqAccess;
 use serde::forward_to_deserialize_any;
-use serde::Deserialize;
 
 use super::VisitorExt;
 use crate::tag::Tag;
@@ -29,20 +30,31 @@ use crate::Result;
 
 pub struct Deserializer<'de> {
     input: &'de [u8],
-    objtable: Vec<usize>,
+    objtable: Vec<&'de [u8]>,
     sym_table: Vec<&'de str>,
     stack: Vec<&'de [u8]>,
     remove_ivar_prefix: bool,
+    blacklisted_objects: BTreeSet<&'de [u8]>,
 }
 
 impl<'de> Deserializer<'de> {
     pub fn new(input: &'de [u8]) -> crate::Result<Self> {
+        if input.len() < 2 {
+            return Err(Error::Eof);
+        }
+
+        let (ver, input) = input.split_at(2);
+        if ver != [4, 8] {
+            return Err(Error::VersionError(std::array::from_fn(|i| ver[i])));
+        }
+
         Ok(Self {
-            input: &input[2..],
+            input,
             objtable: vec![],
             sym_table: vec![],
             stack: vec![],
             remove_ivar_prefix: false,
+            blacklisted_objects: BTreeSet::new(),
         })
     }
 
@@ -170,6 +182,22 @@ impl<'de> Deserializer<'de> {
             t => Err(Error::ExpectedSymbol(t)),
         }
     }
+
+    fn register_blacklisted(&mut self, input: &'de [u8]) {
+        self.blacklisted_objects.insert(input);
+    }
+
+    fn is_blacklisted(&mut self, slice: &'de [u8]) -> bool {
+        self.blacklisted_objects.contains(slice)
+    }
+
+    fn register_obj(&mut self) {
+        // Only push into the object table if we are reading new input
+        if !self.stack.is_empty() || self.is_blacklisted(self.input) {
+            return;
+        }
+        self.objtable.push(self.input);
+    }
 }
 
 impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
@@ -179,43 +207,41 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     where
         V: VisitorExt<'de>,
     {
-        match self.peek_tag()? {
-            Tag::Nil => {
-                self.next_byte()?;
+        if !matches!(
+            self.peek_tag()?,
+            Tag::Nil
+                | Tag::True
+                | Tag::False
+                | Tag::Integer
+                | Tag::Symbol
+                | Tag::Symlink
+                | Tag::ObjectLink
+        ) {
+            self.register_obj();
+        }
+        println!("{:?}", self.peek_tag()?);
 
-                visitor.visit_unit()
-            }
-            Tag::True => {
-                self.next_byte()?;
-
-                visitor.visit_bool(true)
-            }
-            Tag::False => {
-                self.next_byte()?;
-
-                visitor.visit_bool(false)
-            }
-            Tag::Integer => {
-                self.next_byte()?;
-
-                visitor.visit_i32(self.read_packed_int()?)
-            }
-            Tag::Float => {
-                self.next_byte()?;
-
-                visitor.visit_f64(self.read_float()?)
-            }
+        match self.next_tag()? {
+            Tag::Nil => visitor.visit_unit(),
+            Tag::True => visitor.visit_bool(true),
+            Tag::False => visitor.visit_bool(false),
+            Tag::Integer => visitor.visit_i32(self.read_packed_int()?),
+            Tag::Float => visitor.visit_f64(self.read_float()?),
             Tag::String => {
-                self.next_byte()?;
-
                 let len = self.read_packed_int()? as _;
                 let bytes = self.next_bytes_dyn(len)?;
 
-                visitor.visit_ruby_string(bytes, Default::default())
+                visitor.visit_ruby_string(
+                    bytes,
+                    HashSeq {
+                        deserializer: self,
+                        len: 0,
+                        index: 0,
+                        remove_ivar_prefix: false,
+                    },
+                )
             }
             Tag::Array => {
-                self.next_byte()?;
-
                 let len = self.read_packed_int()? as _;
 
                 visitor.visit_seq(ArraySeq {
@@ -225,8 +251,6 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
                 })
             }
             Tag::Hash => {
-                self.next_byte()?;
-
                 let len = self.read_packed_int()? as _;
 
                 visitor.visit_map(HashSeq {
@@ -236,48 +260,31 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
                     remove_ivar_prefix: false,
                 })
             }
+            // FIXME: Account for this
             Tag::HashDefault => todo!(),
-            Tag::Symbol => {
-                self.next_byte()?;
+            Tag::Symbol => visitor.visit_symbol(self.read_symbol()?),
+            Tag::Symlink => visitor.visit_symbol(self.read_symlink()?),
+            Tag::Instance => match self.next_tag()? {
+                Tag::String => {
+                    let len = self.read_packed_int()? as _;
+                    let bytes = self.next_bytes_dyn(len)?;
 
-                visitor.visit_symbol(self.read_symbol()?)
-            }
-            Tag::Symlink => {
-                self.next_byte()?;
+                    let len = self.read_packed_int()? as _;
 
-                visitor.visit_symbol(self.read_symlink()?)
-            }
-            Tag::Instance => {
-                self.next_byte()?;
-
-                match self.next_tag()? {
-                    Tag::String => {
-                        let len = self.read_packed_int()? as _;
-                        let bytes = self.next_bytes_dyn(len)?;
-
-                        let len = self.read_packed_int()? as _;
-                        let mut fields = indexmap::IndexMap::new();
-                        fields.reserve(len);
-
-                        for i in 0..(len) {
-                            let key = crate::value::Symbol::deserialize(&mut *self)?;
-                            let value = crate::Value::deserialize(&mut *self)?;
-
-                            fields.insert(key, value);
-                        }
-
-                        visitor.visit_ruby_string(bytes, fields)
-                    }
-                    Tag::ObjectLink => todo!(),
-                    t => Err(Error::WrongTag(t as _)),
+                    visitor.visit_ruby_string(
+                        bytes,
+                        HashSeq {
+                            len,
+                            index: 0,
+                            deserializer: self,
+                            remove_ivar_prefix: false,
+                        },
+                    )
                 }
-            }
-            Tag::RawRegexp => unimplemented!(),
-            Tag::ClassRef => unimplemented!(),
-            Tag::ModuleRef => unimplemented!(),
+                Tag::ObjectLink => todo!(),
+                t => Err(Error::WrongTag(t as _)),
+            },
             Tag::Object => {
-                self.next_byte()?;
-
                 let class = self.read_symbol_either()?;
                 let len = self.read_packed_int()? as _;
 
@@ -291,10 +298,25 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
                     },
                 )
             }
-            Tag::ObjectLink => todo!(),
-            Tag::UserDef => {
-                self.next_byte()?;
+            Tag::ObjectLink => {
+                let index = self.read_packed_int()? as _;
 
+                let jump_target = self
+                    .objtable
+                    .get(index)
+                    .copied()
+                    .ok_or(Error::UnresolvedObjectlink(index))?;
+
+                self.stack.push(self.input);
+                self.input = jump_target;
+
+                let result = self.deserialize_any(visitor);
+
+                self.input = self.stack.pop().expect("stack empty");
+
+                result
+            }
+            Tag::UserDef => {
                 let class = self.read_symbol_either()?;
                 let len = self.read_packed_int()? as _;
 
@@ -302,6 +324,18 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
 
                 visitor.visit_userdata(class, data)
             }
+
+            Tag::UserClass => Err(Error::Unsupported(
+                "User class (class inheriting from a default ruby class)",
+            )), // FIXME: make this forward to newtype
+            Tag::RawRegexp => Err(Error::Unsupported("Regex")),
+            Tag::ClassRef => Err(Error::Unsupported("Class Reference")),
+            Tag::ModuleRef => Err(Error::Unsupported("Module Reference")),
+            Tag::Extended => Err(Error::Unsupported("Extended object")),
+            Tag::UserMarshal => Err(Error::Unsupported(
+                "User marshal (object serialized as another)",
+            )), // FIXME: Find better name
+            Tag::Struct => Err(Error::Unsupported("Ruby struct")), // FIXME: change this in the future
         }
     }
 

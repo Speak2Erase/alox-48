@@ -18,8 +18,6 @@
 use serde::de::Error as SerdeError;
 use serde::de::{MapAccess, Visitor};
 
-use crate::value::RbFields;
-
 mod impls;
 
 /// This trait is responsible for handling types from ruby's marshal format that do not map well to serde's data model.
@@ -62,8 +60,7 @@ pub trait VisitorExt<'de>: Visitor<'de> {
     ///     std::borrow::Cow::Owned(str) => self.visit_string(str),
     /// }
     /// ```
-    /// FIXME: Change fields to a [`serde::de::MapAccess`]
-    fn visit_ruby_string<E>(self, str: &'de [u8], fields: RbFields) -> Result<Self::Value, E>
+    fn visit_ruby_string<A>(self, str: &'de [u8], fields: A) -> Result<Self::Value, A::Error>
     where
-        E: SerdeError;
+        A: MapAccess<'de>;
 }

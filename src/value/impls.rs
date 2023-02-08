@@ -26,7 +26,7 @@ use super::{RbString, Symbol};
 
 impl RbString {
     pub fn encoding(&self) -> Option<&crate::Value> {
-        self.fields.get("E")
+        self.fields.get("E").or_else(|| self.fields.get("encoding"))
     }
 
     pub fn to_string_lossy(&self) -> Cow<'_, str> {

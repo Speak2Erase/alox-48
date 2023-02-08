@@ -49,35 +49,42 @@ where
         self.visit_borrowed_str(sym)
     }
 
-    default fn visit_ruby_string<E>(
+    default fn visit_ruby_string<A>(
         self,
         str: &'de [u8],
-        fields: RbFields,
-    ) -> Result<Self::Value, E>
+        fields: A,
+    ) -> Result<Self::Value, A::Error>
     where
-        E: SerdeError,
+        A: serde::de::MapAccess<'de>,
     {
-        let str = String::from_utf8_lossy(str);
+        if !str.is_empty() {
+            use crate::Value;
+            use serde::Deserialize;
 
-        use crate::Value;
-        match fields.get("E") {
-            Some(f) => match f {
-                Value::Bool(b) if !*b => {
-                    eprintln!("warning: converting ascii ruby string to utf8")
-                }
-                Value::Bool(b) if *b => {}
-                Value::String(s) => {
-                    eprintln!(
-                        "warning: converting non-utf8 ruby string to utf8: {}",
-                        s.to_string_lossy()
-                    )
-                }
-                v => eprintln!("warning: unexpected encoding type on ruby string: {v:?}"),
-            },
-            None => eprintln!(
-                "warning: converting ruby string with no encoding (likely binary data) to utf8"
-            ),
+            let de = serde::de::value::MapAccessDeserializer::new(fields);
+            let fields = RbFields::deserialize(de)?;
+
+            match fields.get("E").or_else(|| fields.get("encoding")) {
+                Some(f) => match f {
+                    Value::Bool(b) if !*b => {
+                        eprintln!("warning: converting ascii ruby string to utf8")
+                    }
+                    Value::Bool(b) if *b => {}
+                    Value::String(s) => {
+                        eprintln!(
+                            "warning: converting non-utf8 ruby string to utf8: {}",
+                            s.to_string_lossy()
+                        )
+                    }
+                    v => eprintln!("warning: unexpected encoding type on ruby string: {v:?}"),
+                },
+                None => eprintln!(
+                    "warning: converting ruby string with no encoding (likely binary data) to utf8"
+                ),
+            }
         }
+
+        let str = String::from_utf8_lossy(str);
 
         match str {
             std::borrow::Cow::Borrowed(str) => self.visit_borrowed_str(str),
@@ -109,9 +116,9 @@ impl<'de> VisitorExt<'de> for serde::de::IgnoredAny {
         Ok(serde::de::IgnoredAny)
     }
 
-    fn visit_ruby_string<E>(self, _str: &'de [u8], _fields: RbFields) -> Result<Self::Value, E>
+    fn visit_ruby_string<A>(self, _str: &'de [u8], _fields: A) -> Result<Self::Value, A::Error>
     where
-        E: SerdeError,
+        A: MapAccess<'de>,
     {
         Ok(serde::de::IgnoredAny)
     }
