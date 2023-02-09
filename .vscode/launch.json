@@ -7,6 +7,24 @@
         {
             "type": "lldb",
             "request": "launch",
+            "name": "Debug example 'optionals'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=optionals",
+                    "--package=alox-48"
+                ],
+                "filter": {
+                    "name": "optionals",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
             "name": "Debug unit tests in library 'alox-48'",
             "cargo": {
                 "args": [

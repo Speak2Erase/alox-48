@@ -350,7 +350,11 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
         V: de::Visitor<'de>,
     {
         match self.peek_tag()? {
-            Tag::Nil => visitor.visit_none(),
+            Tag::Nil => {
+                self.next_byte()?;
+
+                visitor.visit_none()
+            }
             _ => visitor.visit_some(self),
         }
     }

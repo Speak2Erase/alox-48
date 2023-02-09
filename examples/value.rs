@@ -1,35 +1,7 @@
-#![allow(dead_code)]
-use std::process::Command;
-
 fn main() {
     color_eyre::install().unwrap();
 
-    let data = Command::new("ruby")
-        .arg("-e")
-        .arg(
-            r#"
-            class MyClass
-                def initialize()
-                    @test = Test.new
-                    @bool = true
-                end
-            end
-
-            class Test
-                def initialize()
-                    @map = {
-                        "abc" => true
-                    }
-                end
-            end
-                
-            klass = MyClass.new
-            puts Marshal.dump(klass)
-        "#,
-        )
-        .output()
-        .unwrap()
-        .stdout;
+    let data = std::fs::read("examples/System.rxdata").unwrap();
 
     println!("{}", pretty_hex::pretty_hex(&data));
 
