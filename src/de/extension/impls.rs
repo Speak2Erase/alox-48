@@ -57,13 +57,13 @@ where
     where
         A: serde::de::MapAccess<'de>,
     {
+        use crate::Value;
+        use serde::Deserialize;
+
+        let de = serde::de::value::MapAccessDeserializer::new(fields);
+        let fields = RbFields::deserialize(de)?;
+
         if !str.is_empty() {
-            use crate::Value;
-            use serde::Deserialize;
-
-            let de = serde::de::value::MapAccessDeserializer::new(fields);
-            let fields = RbFields::deserialize(de)?;
-
             match fields.get("E").or_else(|| fields.get("encoding")) {
                 Some(f) => match f {
                     Value::Bool(b) if !*b => {

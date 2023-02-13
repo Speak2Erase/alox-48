@@ -1,13 +1,17 @@
+use serde::Deserialize;
+
 mod rmxp_structs;
 
 fn main() {
     color_eyre::install().unwrap();
 
-    let bytes = std::fs::read("examples/Map001.rxdata").unwrap();
+    let bytes = std::fs::read("examples/Actors.rxdata").unwrap();
 
     println!("{}", pretty_hex::pretty_hex(&bytes));
 
-    let map: rmxp_structs::rpg::Map = alox_48::from_bytes(&bytes).unwrap();
+    let mut de = alox_48::Deserializer::new(&bytes).unwrap();
 
-    println!("{map:#?}")
+    let actors = Vec::<Option<rmxp_structs::rpg::Actor>>::deserialize(&mut de);
+
+    println!("{actors:#?}")
 }

@@ -283,10 +283,9 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
                         },
                     )
                 }
-                // This should work.
-                // I think.
-                // Denial is always the best solution. :)
-                _ => self.deserialize_any(visitor),
+                // This should work. Definitely.
+                // :ferrisclueless:
+                _ => Err(Error::Unsupported("Instance with raw IVARs")),
             },
             Tag::Object => {
                 let class = self.read_symbol_either()?;

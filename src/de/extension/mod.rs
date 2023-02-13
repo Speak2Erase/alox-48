@@ -63,6 +63,8 @@ pub trait VisitorExt<'de>: Visitor<'de> {
     ///     std::borrow::Cow::Owned(str) => self.visit_string(str),
     /// }
     /// ```
+    ///
+    /// YOU MUST DESERIAZE FIELDS. Not deserializing fields will lead to the deserializer being out of sync!
     #[allow(clippy::missing_errors_doc)]
     fn visit_ruby_string<A>(self, str: &'de [u8], fields: A) -> Result<Self::Value, A::Error>
     where

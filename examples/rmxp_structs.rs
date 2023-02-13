@@ -298,6 +298,60 @@ pub mod rpg {
         pub code: i32,
         pub parameters: Vec<Parameter>,
     }
+
+    #[derive(Default, Debug, Deserialize, Serialize)]
+    pub struct Actor {
+        pub id: i32,
+        pub name: String,
+        pub class_id: i32,
+        pub initial_level: i32,
+        pub final_level: i32,
+        pub exp_basis: i32,
+        pub exp_inflation: i32,
+        pub character_name: String,
+        pub character_hue: i32,
+        pub battler_name: String,
+        pub battler_hue: i32,
+        pub parameters: Table2,
+        pub weapon_id: i32,
+        pub armor1_id: i32,
+        pub armor2_id: i32,
+        pub armor3_id: i32,
+        pub armor4_id: i32,
+        pub weapon_fix: bool,
+        pub armor1_fix: bool,
+        pub armor2_fix: bool,
+        pub armor3_fix: bool,
+        pub armor4_fix: bool,
+    }
+
+    #[derive(Debug, Default, Serialize, Deserialize)]
+    #[serde(from = "alox_48::value::Userdata")]
+    pub struct Table2 {
+        xsize: usize,
+        ysize: usize,
+        data: Vec<i16>,
+    }
+
+    impl From<alox_48::value::Userdata> for Table2 {
+        fn from(value: alox_48::value::Userdata) -> Self {
+            let u32_slice: &[u32] =
+                bytemuck::cast_slice(&value.data[0..std::mem::size_of::<u32>() * 5]);
+
+            assert_eq!(u32_slice[0], 2);
+            let xsize = u32_slice[1] as usize;
+            let ysize = u32_slice[2] as usize;
+            let zsize = u32_slice[3] as usize;
+            let len = u32_slice[4] as usize;
+
+            assert_eq!(xsize * ysize * zsize, len);
+            let data =
+                bytemuck::cast_slice(&value.data[(std::mem::size_of::<u32>() * 5)..]).to_vec();
+            assert_eq!(data.len(), len);
+
+            Self { xsize, ysize, data }
+        }
+    }
 }
 
 // appease clippy
