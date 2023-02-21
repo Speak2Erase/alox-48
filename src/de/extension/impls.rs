@@ -116,10 +116,12 @@ impl<'de> VisitorExt<'de> for serde::de::IgnoredAny {
         Ok(serde::de::IgnoredAny)
     }
 
-    fn visit_ruby_string<A>(self, _str: &'de [u8], _fields: A) -> Result<Self::Value, A::Error>
+    fn visit_ruby_string<A>(self, _str: &'de [u8], mut fields: A) -> Result<Self::Value, A::Error>
     where
         A: MapAccess<'de>,
     {
+        while fields.next_entry::<Self, Self>()?.is_some() {}
+
         Ok(serde::de::IgnoredAny)
     }
 }

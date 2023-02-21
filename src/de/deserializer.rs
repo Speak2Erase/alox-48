@@ -328,8 +328,27 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
                 visitor.visit_userdata(class, data)
             }
 
-            // FIXME: Account for this
-            Tag::HashDefault => Err(Error::Unsupported("Hash with default value")),
+            // FIXME: lazy
+            Tag::HashDefault => {
+                use serde::Deserialize;
+
+                let len = self.read_packed_int()? as _;
+
+                let result = visitor.visit_map(HashSeq {
+                    deserializer: self,
+                    len,
+                    index: 0,
+                    remove_ivar_prefix: false,
+                });
+
+                // Ignore the default value.
+                // This should work.
+                // Probably.
+                // :)
+                serde::de::IgnoredAny::deserialize(self)?;
+
+                result
+            }
             Tag::UserClass => Err(Error::Unsupported(
                 "User class (class inheriting from a default ruby class)",
             )), // FIXME: make this forward to newtype
