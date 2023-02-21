@@ -111,6 +111,8 @@ impl<'de> Deserializer<'de> {
             5..=127 => (c - 5) as _,
             -128..=-5 => (c + 5) as _,
             c => {
+                let c = c.abs();
+
                 let mut x = 0;
 
                 for i in 0..c {

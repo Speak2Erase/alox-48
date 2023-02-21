@@ -86,6 +86,8 @@ where
 
         let str = String::from_utf8_lossy(str);
 
+        eprintln!("{str}");
+
         match str {
             std::borrow::Cow::Borrowed(str) => self.visit_borrowed_str(str),
             std::borrow::Cow::Owned(str) => self.visit_string(str),
