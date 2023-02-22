@@ -5,7 +5,7 @@ fn main() {
 
     // println!("{}", pretty_hex::pretty_hex(&data));
 
-    let result: Result<alox_48::Value, _> = alox_48::from_bytes(&data);
+    let result: alox_48::Value = alox_48::from_bytes(&data).unwrap();
 
     println!("{result:#?}")
 }

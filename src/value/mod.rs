@@ -29,7 +29,7 @@ use std::hash::Hash;
 ///
 /// Value is designed to use [`crate::VisitorExt`] extensively to avoid loss of information in the deserialization process.
 /// Userdata/Object, for example, store the class name, which is not something that would normally be possible in serde.
-#[derive(Default, Debug, Clone, EnumAsInner)]
+#[derive(Default, Clone, EnumAsInner)]
 pub enum Value {
     /// A value equivalent to nil in ruby (or [`()`] in rust.)
     #[default]
@@ -57,6 +57,31 @@ pub enum Value {
     Userdata(Userdata),
     /// A generic ruby object.
     Object(Object),
+}
+
+impl std::fmt::Debug for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Value::Nil => f.write_str("nil"),
+            Value::Bool(b) => b.fmt(f),
+            Value::Float(n) => n.fmt(f),
+            Value::Integer(i) => i.fmt(f),
+            Value::String(s) => f.write_fmt(format_args!("{:?}", s.to_string_lossy())),
+            Value::Symbol(s) => s.fmt(f),
+            Value::Array(a) => a.fmt(f),
+            Value::Object(o) => {
+                let mut d = f.debug_struct(&o.class);
+
+                for (k, v) in &o.fields {
+                    d.field(k, v);
+                }
+
+                d.finish()
+            }
+            Value::Hash(h) => h.fmt(f),
+            Value::Userdata(u) => f.debug_struct(&u.class).field("data", &u.data).finish(),
+        }
+    }
 }
 
 /// This type represents types serialized with `_dump` from ruby.
@@ -129,8 +154,14 @@ pub struct RbString {
 /// It's a newtype around a String, meant to preserve types during (de)serialization.
 ///
 /// When serializing, a [`String`] will be serialized as a String, but a [`Symbol`] will be serialized as a Symbol.
-#[derive(Hash, PartialEq, Eq, Default, Debug, Clone)]
+#[derive(Hash, PartialEq, Eq, Default, Clone)]
 pub struct Symbol(pub String);
+
+impl std::fmt::Debug for Symbol {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!(":{}", self.0))
+    }
+}
 
 impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
