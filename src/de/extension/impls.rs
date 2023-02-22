@@ -63,6 +63,7 @@ where
         let de = serde::de::value::MapAccessDeserializer::new(fields);
         let fields = RbFields::deserialize(de)?;
 
+        #[cfg(feature = "warn-encoding")]
         if !str.is_empty() {
             match fields.get("E").or_else(|| fields.get("encoding")) {
                 Some(f) => match f {
@@ -85,8 +86,6 @@ where
         }
 
         let str = String::from_utf8_lossy(str);
-
-        eprintln!("{str}");
 
         match str {
             std::borrow::Cow::Borrowed(str) => self.visit_borrowed_str(str),

@@ -61,7 +61,7 @@ pub enum Error {
     ///
     /// This is a UserClass:
     /// ```rb
-    /// class CustomArray
+    /// class CustomArray < Array
     /// end
     /// Marshal.dump(CustomArray.new)
     /// ```

@@ -111,7 +111,7 @@ impl<'de> Deserializer<'de> {
             5..=127 => (c - 5) as _,
             -128..=-5 => (c + 5) as _,
             c => {
-                let c = c.abs();
+                let c = c.abs(); // ???????? why marshal
 
                 let mut x = 0;
 
