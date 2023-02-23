@@ -21,10 +21,16 @@ use serde::de::{MapAccess, Visitor};
 mod impls;
 
 /// This trait is responsible for handling types from ruby's marshal format that do not map well to serde's data model.
-/// Most functions here forward to the closest serde function by default.
-/// Some functions, such as [`VisitorExt::visit_userdata`] by default do **not** forward to anything at all and instead error.
 ///
 /// This trait only works with alox48.
+///
+/// ### Default impl
+///
+/// Most functions here forward to the closest serde function by default.
+/// Some functions, such as [`VisitorExt::visit_userdata`] by default do **not** forward to anything at all and instead error.
+/// - [`VisitorExt::visit_object`] -> [`serde::de::Visitor::visit_map`]
+/// - [`VisitorExt::visit_symbol`] -> [`serde::de::Visitor::visit_borrowed_str`]
+/// - [`VisitorExt::visit_ruby_string`] -> [`serde::de::Visitor::visit_borrowed_str`]/[`serde::de::Visitor::visit_string`]
 pub trait VisitorExt<'de>: Visitor<'de> {
     /// For deserializing objects serialized via `_dump` in ruby.
     /// The class name is passed in as well as the relevant data.

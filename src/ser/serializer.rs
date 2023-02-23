@@ -21,17 +21,16 @@ use serde::ser;
 
 use crate::Error;
 
-pub fn to_bytes<T>(data: T) -> Result<Vec<u8>, crate::Error>
-where
-    T: serde::Serialize,
-{
-    let mut serializer = Serializer::new();
-    data.serialize(&mut serializer)?;
-    Ok(serializer.output)
-}
-
+/// The `alox_48` serializer.
+///
+/// `alox_48` does not support some data types.
+/// These include:
+/// - Enums
+/// - Newtype Structs
+/// - Unit Structs
 #[derive(Debug, Clone)]
 pub struct Serializer {
+    /// The underlying output of the serializer.
     pub output: Vec<u8>,
     symlink: IndexSet<String>,
 }
@@ -46,12 +45,16 @@ impl Default for Serializer {
 }
 
 impl Serializer {
+    /// Creates a new deserializer.
+    ///
+    /// Same as [`Default::default`].
     #[must_use]
     pub fn new() -> Self {
         Serializer::default()
     }
 
     // Does not emit a type byte.
+    // FIXME: find a way around these warnings
     #[allow(
         clippy::cast_precision_loss,
         clippy::cast_sign_loss,
@@ -160,11 +163,18 @@ impl<'a> ser::Serializer for &'a mut Serializer {
     }
 
     fn serialize_f32(self, v: f32) -> Result<Self::Ok, Self::Error> {
-        todo!()
+        self.serialize_f64(f64::from(v))
     }
 
     fn serialize_f64(self, v: f64) -> Result<Self::Ok, Self::Error> {
-        todo!()
+        self.append(b'f');
+
+        let str = v.to_string();
+        self.write_int(str.len() as _);
+
+        self.write_bytes(str);
+
+        Ok(())
     }
 
     fn serialize_char(self, v: char) -> Result<Self::Ok, Self::Error> {
@@ -245,7 +255,7 @@ impl<'a> ser::Serializer for &'a mut Serializer {
     where
         T: serde::Serialize,
     {
-        todo!()
+        Err(Error::Unsupported("newtype struct"))
     }
 
     fn serialize_newtype_variant<T: ?Sized>(
@@ -410,11 +420,11 @@ impl<'a> ser::SerializeStructVariant for &'a mut Serializer {
     where
         T: serde::Serialize,
     {
-        Err(Error::Unsupported("enum"))
+        Err(Error::Unsupported("enums"))
     }
 
     fn end(self) -> Result<Self::Ok, Self::Error> {
-        unreachable!()
+        Err(Error::Unsupported("enums"))
     }
 }
 
@@ -448,7 +458,7 @@ impl<'a> ser::SerializeTupleStruct for &'a mut Serializer {
     }
 
     fn end(self) -> Result<Self::Ok, Self::Error> {
-        unreachable!()
+        Err(Error::Unsupported("tuple struct"))
     }
 }
 
@@ -465,7 +475,7 @@ impl<'a> ser::SerializeTupleVariant for &'a mut Serializer {
     }
 
     fn end(self) -> Result<Self::Ok, Self::Error> {
-        unreachable!()
+        Err(Error::Unsupported("enums"))
     }
 }
 
@@ -503,5 +513,16 @@ impl<'a> super::SerializeExt for &'a mut Serializer {
         self.write_bytes(data);
 
         Ok(())
+    }
+}
+
+impl<'a> super::SerializeObject for &'a mut Serializer {
+    fn serialize_field<T: ?Sized>(&mut self, key: &str, value: &T) -> Result<(), Self::Error>
+    where
+        T: serde::Serialize,
+    {
+        self.write_symbol(key);
+
+        T::serialize(value, &mut **self)
     }
 }

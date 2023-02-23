@@ -16,7 +16,7 @@
 // along with alox-48.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::{
-    borrow::{Borrow, Cow},
+    borrow::{Borrow, BorrowMut, Cow},
     fmt::{Debug, Display},
     ops::{Deref, DerefMut},
     string::FromUtf8Error,
@@ -55,6 +55,12 @@ impl Debug for RbString {
     }
 }
 
+impl Display for RbString {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.to_string_lossy())
+    }
+}
+
 impl Deref for RbString {
     type Target = Vec<u8>;
 
@@ -71,10 +77,10 @@ impl DerefMut for RbString {
 
 impl<T> PartialEq<T> for RbString
 where
-    T: AsRef<[u8]>,
+    [u8]: PartialEq<T>,
 {
     fn eq(&self, other: &T) -> bool {
-        self.data.as_slice() == other.as_ref()
+        self.data.as_slice().eq(other)
     }
 }
 
@@ -84,12 +90,18 @@ impl Borrow<[u8]> for RbString {
     }
 }
 
+impl BorrowMut<[u8]> for RbString {
+    fn borrow_mut(&mut self) -> &mut [u8] {
+        self
+    }
+}
+
 impl<T> PartialEq<T> for Symbol
 where
-    T: AsRef<str>,
+    String: PartialEq<T>,
 {
     fn eq(&self, other: &T) -> bool {
-        self.0 == other.as_ref()
+        self.0.eq(other)
     }
 }
 
@@ -116,5 +128,23 @@ impl DerefMut for Symbol {
 impl Borrow<str> for Symbol {
     fn borrow(&self) -> &str {
         self
+    }
+}
+
+impl BorrowMut<str> for Symbol {
+    fn borrow_mut(&mut self) -> &mut str {
+        self
+    }
+}
+
+impl AsRef<str> for Symbol {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl AsMut<str> for Symbol {
+    fn as_mut(&mut self) -> &mut str {
+        &mut self.0
     }
 }

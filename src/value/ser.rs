@@ -17,17 +17,28 @@
 
 use serde::Serialize;
 
-use crate::SerializeExt;
+use crate::{ser::SerializeObject, Object, SerializeExt};
 
 use super::{RbString, Symbol, Userdata, Value};
 
 #[allow(clippy::panic_in_result_fn)]
 impl Serialize for Value {
-    fn serialize<S>(&self, _serializer: S) -> Result<S::Ok, S::Error>
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: SerializeExt,
     {
-        todo!()
+        match self {
+            Value::Nil => serializer.serialize_unit(),
+            Value::Bool(b) => serializer.serialize_bool(*b),
+            Value::Float(f) => serializer.serialize_f64(*f),
+            Value::Integer(i) => serializer.serialize_i64(*i),
+            Value::String(s) => serializer.serialize_ruby_string(s),
+            Value::Symbol(s) => serializer.serialize_symbol(s),
+            Value::Array(a) => a.serialize(serializer),
+            Value::Hash(h) => h.serialize(serializer),
+            Value::Userdata(u) => u.serialize(serializer),
+            Value::Object(o) => o.serialize(serializer),
+        }
     }
 }
 
@@ -55,5 +66,19 @@ impl Serialize for Userdata {
         S: SerializeExt,
     {
         serializer.serialize_userdata(&self.class, &self.data)
+    }
+}
+
+impl Serialize for Object {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: SerializeExt,
+    {
+        let mut s = serializer.serialize_object(&self.class, self.fields.len())?;
+
+        for (k, v) in self.fields.iter() {
+            s.serialize_field(k, v)?;
+        }
+        s.end()
     }
 }
