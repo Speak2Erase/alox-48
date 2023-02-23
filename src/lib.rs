@@ -79,7 +79,7 @@ pub mod value;
 pub use de::{Deserializer, VisitorExt};
 pub use error::{Error, Result};
 pub use ser::{SerializeExt, Serializer};
-pub use value::{Object, RbArray, RbHash, RbString, Userdata, Value};
+pub use value::{Object, RbArray, RbHash, RbString, Symbol, Userdata, Value};
 
 /// Deserialize data from some bytes.
 /// It's a convenience function over [`Deserializer::new`] and [`serde::Deserialize`].
@@ -107,4 +107,252 @@ where
     let mut serializer = Serializer::new();
     data.serialize(&mut serializer)?;
     Ok(serializer.output)
+}
+
+#[cfg(test)]
+mod ints {
+    #[test]
+    fn deserialize() {
+        let bytes = &[0x04, 0x08, 0x69, 0x19];
+
+        let int: u8 = crate::from_bytes(bytes).unwrap();
+
+        assert_eq!(int, 20);
+    }
+
+    #[test]
+    fn round_trip() {
+        let int = 2_576_179;
+
+        let bytes = crate::to_bytes(int).unwrap();
+
+        let int2 = crate::from_bytes(&bytes).unwrap();
+
+        assert_eq!(int, int2);
+    }
+
+    #[test]
+    fn negatives() {
+        let bytes = &[0x04, 0x08, 0x69, 0xfd, 0x1d, 0xf0, 0xfc];
+
+        let int: i32 = crate::from_bytes(bytes).unwrap();
+
+        assert_eq!(int, -200_675);
+    }
+}
+
+#[cfg(test)]
+mod strings {
+    #[test]
+    fn deserialize() {
+        let bytes = &[
+            0x04, 0x08, 0x49, 0x22, 0x11, 0x68, 0x65, 0x6c, 0x6c, 0x6f, 0x20, 0x74, 0x68, 0x65,
+            0x72, 0x65, 0x21, 0x06, 0x3a, 0x06, 0x45, 0x54,
+        ];
+
+        let str: &str = crate::from_bytes(bytes).unwrap();
+
+        assert_eq!(str, "hello there!");
+    }
+
+    #[test]
+    fn round_trip() {
+        let str = "round trip!!";
+
+        let bytes = crate::to_bytes(str).unwrap();
+
+        let str2: &str = crate::from_bytes(&bytes).unwrap();
+
+        assert_eq!(str, str2);
+    }
+
+    #[test]
+    fn weird_encoding() {
+        let bytes = &[
+            0x04, 0x08, 0x49, 0x22, 0x11, 0x68, 0x65, 0x6c, 0x6c, 0x6f, 0x20, 0x74, 0x68, 0x65,
+            0x72, 0x65, 0x21, 0x06, 0x3a, 0x0d, 0x65, 0x6e, 0x63, 0x6f, 0x64, 0x69, 0x6e, 0x67,
+            0x22, 0x09, 0x42, 0x69, 0x67, 0x35,
+        ];
+
+        let str: crate::RbString = crate::from_bytes(bytes).unwrap();
+
+        assert_eq!(
+            str.encoding().unwrap().as_string().unwrap().data, // this is a mess lol, i should fix it
+            "Big5".as_bytes()
+        );
+    }
+
+    #[test]
+    fn weird_encoding_round_trip() {
+        let bytes: &[_] = &[
+            0x04, 0x08, 0x49, 0x22, 0x11, 0x68, 0x65, 0x6c, 0x6c, 0x6f, 0x20, 0x74, 0x68, 0x65,
+            0x72, 0x65, 0x21, 0x06, 0x3a, 0x0d, 0x65, 0x6e, 0x63, 0x6f, 0x64, 0x69, 0x6e, 0x67,
+            0x22, 0x09, 0x42, 0x69, 0x67, 0x35,
+        ];
+
+        let str: crate::RbString = crate::from_bytes(bytes).unwrap();
+
+        let bytes2 = crate::to_bytes(&str).unwrap();
+
+        assert_eq!(bytes, bytes2);
+    }
+}
+
+#[cfg(test)]
+mod floats {
+    #[test]
+    fn deserialize() {
+        let bytes = &[0x04, 0x08, 0x66, 0x07, 0x31, 0x35];
+
+        let float: f64 = crate::from_bytes(bytes).unwrap();
+
+        assert!((float - 15.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn round_trip() {
+        let float = 20870.15;
+
+        let bytes = crate::to_bytes(float).unwrap();
+
+        let float2: f64 = crate::from_bytes(&bytes).unwrap();
+
+        assert!((float - float2).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn nan() {
+        let bytes = &[0x04, 0x08, 0x66, 0x08, 0x6e, 0x61, 0x6e];
+
+        let float: f64 = crate::from_bytes(bytes).unwrap();
+
+        assert!(float.is_nan());
+    }
+
+    #[test]
+    fn round_trip_nan() {
+        let float = f64::NAN;
+
+        let bytes = crate::to_bytes(float).unwrap();
+
+        let float2: f64 = crate::from_bytes(&bytes).unwrap();
+
+        assert!(float.is_nan());
+        assert_eq!(
+            bytemuck::cast::<_, u64>(float),
+            bytemuck::cast::<_, u64>(float2)
+        );
+    }
+}
+
+#[cfg(test)]
+mod arrays {
+    #[test]
+    fn deserialize() {
+        let bytes = &[
+            0x04, 0x08, 0x5b, 0x0a, 0x69, 0x00, 0x69, 0x06, 0x69, 0x07, 0x69, 0x08, 0x69, 0x09,
+        ];
+
+        let ary: Vec<u8> = crate::from_bytes(bytes).unwrap();
+
+        assert_eq!(ary, vec![0, 1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn round_trip() {
+        let ary = vec!["hi!", "goodbye!", "pain"];
+
+        let bytes = crate::to_bytes(&ary).unwrap();
+        let ary2: Vec<&str> = crate::from_bytes(&bytes).unwrap();
+
+        assert_eq!(ary, ary2);
+    }
+}
+
+#[cfg(test)]
+mod structs {
+    #[test]
+    fn deserialize_borrowed() {
+        #[derive(serde::Deserialize, serde::Serialize, PartialEq, Debug)]
+        struct Test<'d> {
+            field1: bool,
+            field2: &'d str,
+        }
+
+        let bytes = &[
+            0x04, 0x08, 0x6f, 0x3a, 0x09, 0x54, 0x65, 0x73, 0x74, 0x07, 0x3a, 0x0c, 0x40, 0x66,
+            0x69, 0x65, 0x6c, 0x64, 0x31, 0x54, 0x3a, 0x0c, 0x40, 0x66, 0x69, 0x65, 0x6c, 0x64,
+            0x32, 0x49, 0x22, 0x10, 0x68, 0x65, 0x6c, 0x6c, 0x6f, 0x20, 0x74, 0x68, 0x65, 0x72,
+            0x65, 0x06, 0x3a, 0x06, 0x45, 0x54,
+        ];
+
+        let obj: Test<'_> = crate::from_bytes(bytes).unwrap();
+
+        assert_eq!(
+            obj,
+            Test {
+                field1: true,
+                field2: "hello there"
+            }
+        );
+    }
+
+    #[test]
+    fn userdata() {
+        #[derive(serde::Deserialize, Debug, PartialEq, Eq)]
+        #[serde(from = "crate::Userdata")]
+        struct MyUserData {
+            field: [char; 4],
+        }
+
+        impl From<crate::Userdata> for MyUserData {
+            fn from(value: crate::Userdata) -> Self {
+                assert_eq!(value.class, "MyUserData");
+                let field = std::array::from_fn(|i| value.data[i] as char);
+                Self { field }
+            }
+        }
+        let bytes = &[
+            0x04, 0x08, 0x75, 0x3a, 0x0f, 0x4d, 0x79, 0x55, 0x73, 0x65, 0x72, 0x44, 0x61, 0x74,
+            0x61, 0x09, 0x61, 0x62, 0x63, 0x64,
+        ];
+        let data: MyUserData = crate::from_bytes(bytes).unwrap();
+
+        assert_eq!(
+            data,
+            MyUserData {
+                field: ['a', 'b', 'c', 'd']
+            }
+        );
+    }
+}
+
+#[cfg(test)]
+mod misc {
+    #[test]
+    fn symbol() {
+        let sym = crate::Symbol::from("symbol");
+
+        let bytes = crate::to_bytes(&sym).unwrap();
+
+        let sym2: crate::Symbol = crate::from_bytes(&bytes).unwrap();
+
+        assert_eq!(sym, sym2);
+    }
+
+    // Testing for zero copy symlink deserialization
+    // ALL symbols should be the same reference
+    #[test]
+    fn symlink() {
+        let bytes = &[
+            0x04, 0x08, 0x5b, 0x0a, 0x3a, 0x09, 0x74, 0x65, 0x73, 0x74, 0x3b, 0x00, 0x3b, 0x00,
+            0x3b, 0x00, 0x3b, 0x00,
+        ];
+
+        let symbols: Vec<&str> = crate::from_bytes(bytes).unwrap();
+
+        for sym in symbols.windows(2) {
+            assert_eq!(sym[0].as_ptr(), sym[1].as_ptr());
+        }
+    }
 }

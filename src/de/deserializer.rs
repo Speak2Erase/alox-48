@@ -110,13 +110,23 @@ impl<'de> Deserializer<'de> {
             0 => 0,
             5..=127 => (c - 5) as _,
             -128..=-5 => (c + 5) as _,
-            c => {
-                let c = c.abs(); // ???????? why marshal
-
+            1..=4 => {
                 let mut x = 0;
 
                 for i in 0..c {
                     x |= (self.next_byte()? as i32) << (8 * i);
+                }
+
+                x
+            }
+            -4..=-1 => {
+                let mut x = -1;
+
+                for i in 0..-c {
+                    let a = !(0xFF << (8 * i)); // wtf is this magic
+                    let b = (self.next_byte()? as i32) << (8 * i);
+
+                    x = (x & a) | b;
                 }
 
                 x

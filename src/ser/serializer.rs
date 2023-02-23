@@ -489,7 +489,9 @@ impl<'a> super::SerializeExt for &'a mut Serializer {
     fn serialize_ruby_string(self, string: &crate::RbString) -> Result<Self::Ok, Self::Error> {
         use serde::Serialize;
 
-        self.append(b'I');
+        if !string.fields.is_empty() {
+            self.append(b'I');
+        }
 
         // Write string
         self.append(b'"');
@@ -497,10 +499,15 @@ impl<'a> super::SerializeExt for &'a mut Serializer {
 
         self.write_bytes(string.as_slice());
 
-        // Write the field len of 1
-        self.write_int(1);
+        if !string.fields.is_empty() {
+            // Write the field len of 1
+            self.write_int(1);
 
-        string.fields.serialize(self)?; // FIXME: do this manually
+            for (k, v) in string.fields.iter() {
+                k.serialize(&mut *self)?;
+                v.serialize(&mut *self)?;
+            }
+        }
 
         Ok(())
     }
