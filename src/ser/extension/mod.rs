@@ -50,11 +50,12 @@ pub trait SerializeExt: serde::Serializer {
     ) -> Result<Self::SerializeObject, Self::Error>;
 }
 
+// FIXME: Figure out
+//? Should this add @?
+
 /// This is essentially like [`serde::ser::SerializeStruct`] but for Objects.
 ///
 /// `SerializeStruct` takes in a [`&'static str`] for field names, but that is simply not feasible for things like [`crate::Value`].
-///
-/// [`crate::Serializer`] will not add `@` to the beginning of field names too, like it does for [`serde::ser::SerializeStruct`].
 ///
 /// ### Default impl
 ///

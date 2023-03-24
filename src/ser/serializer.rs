@@ -63,8 +63,8 @@ impl Serializer {
     fn write_int(&mut self, v: i64) {
         match v {
             0 => self.append(0),
-            1..=123 => self.append(v as u8 + 5),
-            -123..=0 => self.append((256 + v - 5) as u8),
+            1..=122 => self.append(v as u8 + 5),
+            -122..=0 => self.append((256 + v - 5) as u8),
             mut v => {
                 let mut res = vec![];
 
@@ -521,6 +521,18 @@ impl<'a> super::SerializeExt for &'a mut Serializer {
 
         Ok(())
     }
+
+    fn serialize_object(
+        self,
+        class: &str,
+        len: usize,
+    ) -> Result<Self::SerializeObject, Self::Error> {
+        self.append(b'o');
+        self.write_symbol(class);
+
+        self.write_int(len as _);
+        Ok(self)
+    }
 }
 
 impl<'a> super::SerializeObject for &'a mut Serializer {
@@ -528,7 +540,7 @@ impl<'a> super::SerializeObject for &'a mut Serializer {
     where
         T: serde::Serialize,
     {
-        self.write_symbol(key);
+        self.write_symbol(&format!("@{key}"));
 
         T::serialize(value, &mut **self)
     }

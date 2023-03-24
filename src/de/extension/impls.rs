@@ -49,6 +49,7 @@ where
         self.visit_borrowed_str(sym)
     }
 
+    #[allow(unused_imports, unused_variables)]
     default fn visit_ruby_string<A>(
         self,
         str: &'de [u8],

@@ -122,13 +122,24 @@ mod ints {
 
     #[test]
     fn round_trip() {
-        let int = 2_576_179;
+        let int = 123;
 
         let bytes = crate::to_bytes(int).unwrap();
 
         let int2 = crate::from_bytes(&bytes).unwrap();
 
         assert_eq!(int, int2);
+    }
+
+    #[test]
+    fn round_trip_value() {
+        let value = crate::Value::Integer(123);
+
+        let bytes = crate::to_bytes(&value).unwrap();
+
+        let value2 = crate::from_bytes(&bytes).unwrap();
+
+        assert_eq!(value, value2);
     }
 
     #[test]
