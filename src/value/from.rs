@@ -34,6 +34,18 @@ impl Value {
     }
 }
 
+impl<T> From<Option<T>> for Value
+where
+    T: Into<Value>,
+{
+    fn from(value: Option<T>) -> Self {
+        match value {
+            Some(v) => v.into(),
+            None => Self::Nil,
+        }
+    }
+}
+
 impl From<String> for Value {
     fn from(value: String) -> Self {
         let fields = utf8_enc!();
