@@ -19,7 +19,7 @@
 use indexmap::IndexSet;
 use serde::ser;
 
-use crate::Error;
+use crate::{Error, Symbol};
 
 /// The `alox_48` serializer.
 ///
@@ -345,7 +345,7 @@ impl<'a> ser::Serializer for &'a mut Serializer {
 impl<'a> ser::SerializeMap for &'a mut Serializer {
     type Ok = ();
 
-    type Error = crate::Error;
+    type Error = Error;
 
     fn serialize_key<T: ?Sized>(&mut self, key: &T) -> Result<(), Self::Error>
     where
@@ -480,8 +480,8 @@ impl<'a> ser::SerializeTupleVariant for &'a mut Serializer {
 }
 
 impl<'a> super::SerializeExt for &'a mut Serializer {
-    fn serialize_symbol(self, symbol: &str) -> Result<Self::Ok, Self::Error> {
-        self.write_symbol(symbol);
+    fn serialize_symbol(self, symbol: &Symbol) -> Result<Self::Ok, Self::Error> {
+        self.write_symbol(symbol.as_str());
 
         Ok(())
     }
@@ -512,9 +512,9 @@ impl<'a> super::SerializeExt for &'a mut Serializer {
         Ok(())
     }
 
-    fn serialize_userdata(self, class: &str, data: &[u8]) -> Result<Self::Ok, Self::Error> {
+    fn serialize_userdata(self, class: &Symbol, data: &[u8]) -> Result<Self::Ok, Self::Error> {
         self.append(b'u');
-        self.write_symbol(class);
+        self.write_symbol(class.as_str());
 
         self.write_int(data.len() as _);
         self.write_bytes(data);
@@ -524,11 +524,11 @@ impl<'a> super::SerializeExt for &'a mut Serializer {
 
     fn serialize_object(
         self,
-        class: &str,
+        class: &Symbol,
         len: usize,
     ) -> Result<Self::SerializeObject, Self::Error> {
         self.append(b'o');
-        self.write_symbol(class);
+        self.write_symbol(class.as_str());
 
         self.write_int(len as _);
         Ok(self)
@@ -536,7 +536,7 @@ impl<'a> super::SerializeExt for &'a mut Serializer {
 }
 
 impl<'a> super::SerializeObject for &'a mut Serializer {
-    fn serialize_field<T: ?Sized>(&mut self, key: &str, value: &T) -> Result<(), Self::Error>
+    fn serialize_field<T: ?Sized>(&mut self, key: &Symbol, value: &T) -> Result<(), Self::Error>
     where
         T: serde::Serialize,
     {

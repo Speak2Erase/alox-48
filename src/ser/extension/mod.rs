@@ -16,6 +16,7 @@
 // along with alox-48.  If not, see <http://www.gnu.org/licenses/>.
 #![allow(clippy::missing_errors_doc)]
 
+use crate::{RbString, Symbol};
 use serde::ser::Error;
 
 /// Serializer extension.
@@ -30,22 +31,22 @@ pub trait SerializeExt: serde::Serializer {
     /// Serialize a symbol.
     ///
     /// Used to preserve types.
-    fn serialize_symbol(self, symbol: &str) -> Result<Self::Ok, Self::Error>;
+    fn serialize_symbol(self, symbol: &Symbol) -> Result<Self::Ok, Self::Error>;
 
     /// Serialize userdata.
     ///
     /// This is mainly used for serializing [`crate::Userdata`].
-    fn serialize_userdata(self, class: &str, data: &[u8]) -> Result<Self::Ok, Self::Error>;
+    fn serialize_userdata(self, class: &Symbol, data: &[u8]) -> Result<Self::Ok, Self::Error>;
 
     /// Serialize a ruby string, with extra fields.
     ///
     /// This is mainly used for serializing [`crate::RbString`].
-    fn serialize_ruby_string(self, string: &crate::RbString) -> Result<Self::Ok, Self::Error>;
+    fn serialize_ruby_string(self, string: &RbString) -> Result<Self::Ok, Self::Error>;
 
     /// Serialize an object.
     fn serialize_object(
         self,
-        class: &str,
+        class: &Symbol,
         len: usize,
     ) -> Result<Self::SerializeObject, Self::Error>;
 }
@@ -73,14 +74,14 @@ pub trait SerializeObject {
 
     /// Serialize a field.
     /// The field name will **NOT** be prefixed by an `@`.
-    fn serialize_field<T: ?Sized>(&mut self, key: &str, value: &T) -> Result<(), Self::Error>
+    fn serialize_field<T: ?Sized>(&mut self, field: &Symbol, value: &T) -> Result<(), Self::Error>
     where
         T: serde::Serialize;
 
     /// Indicate that a struct field has been skipped.
     #[inline]
-    fn skip_field(&mut self, key: &str) -> Result<(), Self::Error> {
-        let _ = key;
+    fn skip_field(&mut self, field: &Symbol) -> Result<(), Self::Error> {
+        let _ = field;
         Ok(())
     }
 
@@ -97,7 +98,7 @@ where
 
     default fn serialize_field<A: ?Sized>(
         &mut self,
-        _key: &str,
+        _field: &Symbol,
         _value: &A,
     ) -> Result<(), Self::Error>
     where
@@ -119,7 +120,7 @@ where
 {
     type SerializeObject = Self::SerializeStruct;
 
-    default fn serialize_symbol(self, _symbol: &str) -> Result<Self::Ok, Self::Error> {
+    default fn serialize_symbol(self, _symbol: &Symbol) -> Result<Self::Ok, Self::Error> {
         Err(Self::Error::custom(
             "this serializer is not from alox-48 and thus does not support serializing symbols.",
         ))
@@ -127,7 +128,7 @@ where
 
     default fn serialize_userdata(
         self,
-        _class: &str,
+        _class: &Symbol,
         _data: &[u8],
     ) -> Result<Self::Ok, Self::Error> {
         Err(Self::Error::custom(
@@ -135,10 +136,7 @@ where
         ))
     }
 
-    default fn serialize_ruby_string(
-        self,
-        _string: &crate::RbString,
-    ) -> Result<Self::Ok, Self::Error> {
+    default fn serialize_ruby_string(self, _string: &RbString) -> Result<Self::Ok, Self::Error> {
         Err(Self::Error::custom(
             "this serializer is not from alox-48 and thus does not support serializing ruby strings.",
         ))
@@ -146,7 +144,7 @@ where
 
     default fn serialize_object(
         self,
-        _class: &str,
+        _class: &Symbol,
         _len: usize,
     ) -> Result<Self::SerializeStruct, Self::Error> {
         Err(Self::Error::custom(

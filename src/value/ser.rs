@@ -14,18 +14,13 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with Luminol.  If not, see <http://www.gnu.org/licenses/>.
-
-use serde::Serialize;
-
-use crate::{ser::SerializeObject, Object, SerializeExt};
-
-use super::{RbString, Symbol, Userdata, Value};
+use super::Value;
 
 #[allow(clippy::panic_in_result_fn)]
-impl Serialize for Value {
+impl serde::Serialize for Value {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
-        S: SerializeExt,
+        S: crate::SerializeExt,
     {
         match self {
             Value::Nil => serializer.serialize_unit(),
@@ -39,46 +34,5 @@ impl Serialize for Value {
             Value::Userdata(u) => u.serialize(serializer),
             Value::Object(o) => o.serialize(serializer),
         }
-    }
-}
-
-impl Serialize for Symbol {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: SerializeExt,
-    {
-        serializer.serialize_symbol(self)
-    }
-}
-
-impl Serialize for RbString {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: SerializeExt,
-    {
-        serializer.serialize_ruby_string(self)
-    }
-}
-
-impl Serialize for Userdata {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: SerializeExt,
-    {
-        serializer.serialize_userdata(&self.class, &self.data)
-    }
-}
-
-impl Serialize for Object {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: SerializeExt,
-    {
-        let mut s = serializer.serialize_object(&self.class, self.fields.len())?;
-
-        for (k, v) in self.fields.iter() {
-            s.serialize_field(k, v)?;
-        }
-        s.end()
     }
 }

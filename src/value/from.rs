@@ -57,9 +57,26 @@ impl From<String> for Value {
     }
 }
 
+impl From<&str> for Value {
+    fn from(value: &str) -> Self {
+        let fields = utf8_enc!();
+
+        Value::String(RbString {
+            data: value.to_string().into_bytes(),
+            fields,
+        })
+    }
+}
+
 impl From<RbString> for Value {
     fn from(value: RbString) -> Self {
         Self::String(value)
+    }
+}
+
+impl From<Symbol> for Value {
+    fn from(value: Symbol) -> Self {
+        Self::Symbol(value)
     }
 }
 
@@ -151,40 +168,6 @@ impl From<Value> for bool {
             Value::Nil => false,
             Value::Bool(b) => b,
             _ => true,
-        }
-    }
-}
-
-impl From<String> for Symbol {
-    fn from(value: String) -> Self {
-        Self(value)
-    }
-}
-
-impl From<&str> for Symbol {
-    fn from(value: &str) -> Self {
-        Self(value.to_string())
-    }
-}
-
-impl From<&str> for RbString {
-    fn from(value: &str) -> Self {
-        let fields = utf8_enc!();
-
-        Self {
-            data: value.as_bytes().to_vec(),
-            fields,
-        }
-    }
-}
-
-impl From<String> for RbString {
-    fn from(value: String) -> Self {
-        let fields = utf8_enc!();
-
-        Self {
-            data: value.into_bytes(),
-            fields,
         }
     }
 }
