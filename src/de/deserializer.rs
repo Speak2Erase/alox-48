@@ -26,6 +26,7 @@ use serde::de;
 use serde::de::MapAccess;
 use serde::de::SeqAccess;
 use serde::forward_to_deserialize_any;
+use serde::Deserialize;
 
 use super::VisitorExt;
 use crate::tag::Tag;
@@ -245,17 +246,12 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
             Tag::Float => visitor.visit_f64(self.read_float()?),
             Tag::String => {
                 let len = self.read_packed_int()? as _;
-                let bytes = self.next_bytes_dyn(len)?;
+                let data = self.next_bytes_dyn(len)?.to_vec();
 
-                visitor.visit_ruby_string(
-                    bytes,
-                    HashSeq {
-                        deserializer: self,
-                        len: 0,
-                        index: 0,
-                        remove_ivar_prefix: false,
-                    },
-                )
+                visitor.visit_ruby_string(crate::RbString {
+                    data,
+                    ..Default::default()
+                })
             }
             Tag::Array => {
                 let len = self.read_packed_int()? as _;
@@ -276,42 +272,39 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
                     remove_ivar_prefix: false,
                 })
             }
-            Tag::Symbol => visitor.visit_symbol(self.read_symbol()?),
-            Tag::Symlink => visitor.visit_symbol(self.read_symlink()?),
+            Tag::Symbol => visitor.visit_symbol(self.read_symbol()?.into()),
+            Tag::Symlink => visitor.visit_symbol(self.read_symlink()?.into()),
             Tag::Instance => match self.next_tag()? {
                 Tag::String => {
                     let len = self.read_packed_int()? as _;
-                    let bytes = self.next_bytes_dyn(len)?;
+                    let data = self.next_bytes_dyn(len)?.to_vec();
 
                     let len = self.read_packed_int()? as _;
+                    let mut fields = crate::value::RbFields::with_capacity(len);
+                    for _ in 0..len {
+                        let key = crate::Symbol::deserialize(&mut *self)?;
+                        let value = crate::Value::deserialize(&mut *self)?;
+                        fields.insert(key, value);
+                    }
 
-                    visitor.visit_ruby_string(
-                        bytes,
-                        HashSeq {
-                            len,
-                            index: 0,
-                            deserializer: self,
-                            remove_ivar_prefix: false,
-                        },
-                    )
+                    visitor.visit_ruby_string(crate::RbString { data, fields })
                 }
                 // This should work. Definitely.
                 // :ferrisclueless:
                 _ => Err(Error::Unsupported("Instance with raw IVARs")),
             },
             Tag::Object => {
-                let class = self.read_symbol_either()?;
-                let len = self.read_packed_int()? as _;
+                let class = self.read_symbol_either()?.into();
 
-                visitor.visit_object(
-                    class,
-                    HashSeq {
-                        deserializer: self,
-                        len,
-                        index: 0,
-                        remove_ivar_prefix: true,
-                    },
-                )
+                let len = self.read_packed_int()? as _;
+                let mut fields = crate::value::RbFields::with_capacity(len);
+                for _ in 0..len {
+                    let key = crate::Symbol::deserialize(&mut *self)?;
+                    let value = crate::Value::deserialize(&mut *self)?;
+                    fields.insert(key, value);
+                }
+
+                visitor.visit_object(crate::Object { class, fields })
             }
             Tag::ObjectLink => {
                 let index = self.read_packed_int()? as _;
@@ -332,18 +325,16 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
                 result
             }
             Tag::UserDef => {
-                let class = self.read_symbol_either()?;
+                let class = self.read_symbol_either()?.into();
                 let len = self.read_packed_int()? as _;
 
-                let data = self.next_bytes_dyn(len)?;
+                let data = self.next_bytes_dyn(len)?.to_owned();
 
-                visitor.visit_userdata(class, data)
+                visitor.visit_userdata(crate::Userdata { class, data })
             }
 
             // FIXME: lazy
             Tag::HashDefault => {
-                use serde::Deserialize;
-
                 let len = self.read_packed_int()? as _;
 
                 let result = visitor.visit_map(HashSeq {

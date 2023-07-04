@@ -16,16 +16,16 @@
 // along with alox-48.  If not, see <http://www.gnu.org/licenses/>.
 
 use serde::de::Error as SerdeError;
-use serde::de::{MapAccess, Unexpected, Visitor};
+use serde::de::{Unexpected, Visitor};
 
 use super::VisitorExt;
-use crate::value::RbFields;
+use crate::{Object, RbString, Symbol, Userdata};
 
 impl<'de, T> VisitorExt<'de> for T
 where
     T: Visitor<'de>,
 {
-    default fn visit_userdata<E>(self, _class: &'de str, _data: &'de [u8]) -> Result<Self::Value, E>
+    default fn visit_userdata<E>(self, _userdata: Userdata) -> Result<Self::Value, E>
     where
         E: SerdeError,
     {
@@ -35,38 +35,40 @@ where
         ))
     }
 
-    default fn visit_object<A>(self, _class: &'de str, fields: A) -> Result<Self::Value, A::Error>
-    where
-        A: MapAccess<'de>,
-    {
-        self.visit_map(fields)
-    }
-
-    default fn visit_symbol<E>(self, sym: &'de str) -> Result<Self::Value, E>
+    default fn visit_object<E>(self, object: Object) -> Result<Self::Value, E>
     where
         E: SerdeError,
     {
-        self.visit_borrowed_str(sym)
+        let fields = serde::de::value::MapDeserializer::new(
+            object
+                .fields
+                .into_iter()
+                .map(|(k, v)| (crate::Value::from(k), v)),
+        );
+        self.visit_map(fields)
+    }
+
+    default fn visit_symbol<E>(self, sym: Symbol) -> Result<Self::Value, E>
+    where
+        E: SerdeError,
+    {
+        self.visit_string(sym.to_string())
     }
 
     #[allow(unused_imports, unused_variables)]
-    default fn visit_ruby_string<A>(
-        self,
-        str: &'de [u8],
-        fields: A,
-    ) -> Result<Self::Value, A::Error>
+    default fn visit_ruby_string<E>(self, string: RbString) -> Result<Self::Value, E>
     where
-        A: serde::de::MapAccess<'de>,
+        E: SerdeError,
     {
         use crate::Value;
-        use serde::Deserialize;
-
-        let de = serde::de::value::MapAccessDeserializer::new(fields);
-        let fields = RbFields::deserialize(de)?;
 
         #[cfg(feature = "warn-encoding")]
-        if !str.is_empty() {
-            match fields.get("E").or_else(|| fields.get("encoding")) {
+        if !string.is_empty() {
+            match string
+                .fields
+                .get("E")
+                .or_else(|| string.fields.get("encoding"))
+            {
                 Some(f) => match f {
                     Value::Bool(b) if !*b => {
                         eprintln!("warning: converting ascii ruby string to utf8");
@@ -86,10 +88,10 @@ where
             }
         }
 
-        let str = String::from_utf8_lossy(str);
+        let str = string.to_string_lossy();
 
         match str {
-            std::borrow::Cow::Borrowed(str) => self.visit_borrowed_str(str),
+            std::borrow::Cow::Borrowed(str) => self.visit_str(str),
             std::borrow::Cow::Owned(str) => self.visit_string(str),
         }
     }
@@ -97,33 +99,31 @@ where
 
 /// Default implementation for [`VisitorExt`].
 impl<'de> VisitorExt<'de> for serde::de::IgnoredAny {
-    fn visit_userdata<E>(self, _class: &'de str, _data: &'de [u8]) -> Result<Self::Value, E>
+    fn visit_userdata<E>(self, _userdata: Userdata) -> Result<Self::Value, E>
     where
         E: SerdeError,
     {
         Ok(serde::de::IgnoredAny)
     }
 
-    fn visit_object<A>(self, _class: &'de str, _fields: A) -> Result<Self::Value, A::Error>
-    where
-        A: MapAccess<'de>,
-    {
-        Ok(serde::de::IgnoredAny)
-    }
-
-    fn visit_symbol<E>(self, _sym: &'de str) -> Result<Self::Value, E>
+    fn visit_object<E>(self, _object: Object) -> Result<Self::Value, E>
     where
         E: SerdeError,
     {
         Ok(serde::de::IgnoredAny)
     }
 
-    fn visit_ruby_string<A>(self, _str: &'de [u8], mut fields: A) -> Result<Self::Value, A::Error>
+    fn visit_symbol<E>(self, _sym: Symbol) -> Result<Self::Value, E>
     where
-        A: MapAccess<'de>,
+        E: SerdeError,
     {
-        while fields.next_entry::<Self, Self>()?.is_some() {}
+        Ok(serde::de::IgnoredAny)
+    }
 
+    fn visit_ruby_string<E>(self, _str: RbString) -> Result<Self::Value, E>
+    where
+        E: SerdeError,
+    {
         Ok(serde::de::IgnoredAny)
     }
 }

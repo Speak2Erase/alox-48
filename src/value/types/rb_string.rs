@@ -110,23 +110,11 @@ impl<'de> serde::Deserialize<'de> for RbString {
         }
 
         impl<'de> crate::VisitorExt<'de> for StringVisitor {
-            fn visit_ruby_string<A>(
-                self,
-                str: &'de [u8],
-                fields: A,
-            ) -> Result<Self::Value, A::Error>
+            fn visit_ruby_string<E>(self, string: RbString) -> Result<Self::Value, E>
             where
-                A: serde::de::MapAccess<'de>,
+                E: serde::de::Error,
             {
-                use serde::Deserialize;
-
-                let de = serde::de::value::MapAccessDeserializer::new(fields);
-                let fields = RbFields::deserialize(de)?;
-
-                Ok(RbString {
-                    data: str.to_vec(),
-                    fields,
-                })
+                Ok(string)
             }
         }
 

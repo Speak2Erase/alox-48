@@ -82,11 +82,11 @@ impl<'de> serde::Deserialize<'de> for Symbol {
         }
 
         impl<'de> crate::VisitorExt<'de> for SymbolVisitor {
-            fn visit_symbol<E>(self, sym: &'de str) -> Result<Self::Value, E>
+            fn visit_symbol<E>(self, sym: Symbol) -> Result<Self::Value, E>
             where
                 E: serde::de::Error,
             {
-                Ok(sym.into())
+                Ok(sym)
             }
         }
 

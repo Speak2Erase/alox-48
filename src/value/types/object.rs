@@ -57,18 +57,11 @@ impl<'de> serde::Deserialize<'de> for Object {
         }
 
         impl<'de> crate::VisitorExt<'de> for ObjectVisitor {
-            fn visit_object<A>(self, class: &'de str, fields: A) -> Result<Self::Value, A::Error>
+            fn visit_object<E>(self, object: Object) -> Result<Self::Value, E>
             where
-                A: serde::de::MapAccess<'de>,
+                E: serde::de::Error,
             {
-                use serde::Deserialize;
-
-                let de = serde::de::value::MapAccessDeserializer::new(fields);
-                let fields = RbFields::deserialize(de)?;
-                Ok(Object {
-                    class: class.into(),
-                    fields,
-                })
+                Ok(object)
             }
         }
 
