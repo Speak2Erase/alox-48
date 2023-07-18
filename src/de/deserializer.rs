@@ -29,9 +29,8 @@ use serde::forward_to_deserialize_any;
 use serde::Deserialize;
 
 use super::VisitorExt;
+use super::{bubble_error, Context, Error, Kind, Result};
 use crate::tag::Tag;
-use crate::Error;
-use crate::Result;
 
 /// The alox-48 deserializer.
 #[derive(Debug, Clone)]
@@ -44,6 +43,23 @@ pub struct Deserializer<'de> {
     blacklisted_objects: BTreeSet<&'de [u8]>,
 }
 
+macro_rules! deserialize_len {
+    ($this:expr, $($context:expr),+ $(,)?) => {{
+        let raw_length = bubble_error!($this.read_packed_int(), $( $context, )+);
+        raw_length.try_into().map_err(|_| Error {
+            kind: Kind::UnexpectedNegativeLength(raw_length),
+            context: vec![$( $context, )+],
+            span: span!(self)
+        })?
+    }};
+}
+
+macro_rules! span {
+    ($this:expr) => {
+        (0..0).into() // TODO
+    };
+}
+
 impl<'de> Deserializer<'de> {
     /// Create a new deserializer with the given input.
     ///
@@ -52,14 +68,24 @@ impl<'de> Deserializer<'de> {
     ///
     /// Will error if the input has a version number != to 4.8.
     /// The first two bytes of marshal data encode the version number. [major, minor]
-    pub fn new(input: &'de [u8]) -> crate::Result<Self> {
+    // this function should never panic in practice as we perform bounds checking.
+    #[allow(clippy::missing_panics_doc)]
+    pub fn new(input: &'de [u8]) -> Result<Self> {
         if input.len() < 2 {
-            return Err(Error::Eof);
+            return Err(Error {
+                kind: Kind::Eof,
+                context: vec![Context::ParsingVersion],
+                span: (0..input.len()).into(),
+            });
         }
 
         let (ver, input) = input.split_at(2);
         if ver != [4, 8] {
-            return Err(Error::VersionError(std::array::from_fn(|i| ver[i])));
+            return Err(Error {
+                kind: Kind::VersionError(ver.try_into().unwrap()),
+                context: vec![Context::ParsingVersion],
+                span: (0..2).into(),
+            });
         }
 
         Ok(Self {
@@ -73,7 +99,11 @@ impl<'de> Deserializer<'de> {
     }
 
     fn peek_byte(&self) -> Result<u8> {
-        self.input.first().copied().ok_or(Error::Eof)
+        self.input.first().copied().ok_or(Error {
+            kind: Kind::Eof,
+            context: vec![],
+            span: span!(self),
+        })
     }
 
     fn next_byte(&mut self) -> Result<u8> {
@@ -83,16 +113,30 @@ impl<'de> Deserializer<'de> {
     }
 
     fn peek_tag(&self) -> Result<Tag> {
-        self.peek_byte()?.try_into()
+        let byte = bubble_error!(self.peek_byte(), Context::FindingTag);
+        Tag::from_u8(byte).ok_or(Error {
+            kind: Kind::WrongTag(byte),
+            context: vec![Context::FindingTag],
+            span: span!(self),
+        })
     }
 
     fn next_tag(&mut self) -> Result<Tag> {
-        self.next_byte()?.try_into()
+        let byte = bubble_error!(self.next_byte(), Context::FindingTag);
+        Tag::from_u8(byte).ok_or(Error {
+            kind: Kind::WrongTag(byte),
+            context: vec![Context::FindingTag],
+            span: span!(self),
+        })
     }
 
     fn next_bytes_dyn(&mut self, length: usize) -> Result<&'de [u8]> {
         if length > self.input.len() {
-            return Result::Err(Error::Eof);
+            return Err(Error {
+                kind: Kind::Eof,
+                context: vec![],
+                span: span!(self),
+            });
         }
 
         let (ret, remaining) = self.input.split_at(length);
@@ -105,7 +149,7 @@ impl<'de> Deserializer<'de> {
         // gets serialized as a bignum.
         //
         // The bounds of an i32 are [-(2**31), 2**31 - 1], so we should be safe.
-        let c = self.next_byte()? as i8;
+        let c = bubble_error!(self.next_byte(), Context::Integer) as i8;
 
         Ok(match c {
             0 => 0,
@@ -115,7 +159,9 @@ impl<'de> Deserializer<'de> {
                 let mut x = 0;
 
                 for i in 0..c {
-                    x |= (self.next_byte()? as i32) << (8 * i);
+                    let n = bubble_error!(self.next_byte(), Context::Integer) as i32;
+                    let n = n << (8 * i);
+                    x |= n;
                 }
 
                 x
@@ -125,7 +171,8 @@ impl<'de> Deserializer<'de> {
 
                 for i in 0..-c {
                     let a = !(0xFF << (8 * i)); // wtf is this magic
-                    let b = (self.next_byte()? as i32) << (8 * i);
+                    let b = bubble_error!(self.next_byte(), Context::Integer) as i32;
+                    let b = b << (8 * i);
 
                     x = (x & a) | b;
                 }
@@ -137,21 +184,25 @@ impl<'de> Deserializer<'de> {
 
     #[allow(clippy::panic_in_result_fn)]
     fn read_float(&mut self) -> Result<f64> {
-        let raw_length = self.read_packed_int()?;
-        let length = raw_length
-            .try_into()
-            .map_err(|_| Error::UnexpectedNegativeLength(raw_length))?;
-        let out = self.next_bytes_dyn(length)?;
+        let length = deserialize_len!(self, Context::Float);
+        let out = bubble_error!(self.next_bytes_dyn(length), Context::Float);
 
         if let Some(terminator_idx) = out.iter().position(|v| *v == 0) {
             let (str, [0, mantissa @ ..]) = out.split_at(terminator_idx) else {
                 unreachable!();
             };
-            let float = str::parse::<f64>(&String::from_utf8_lossy(str))
-                .map_err(|err| Error::Message(err.to_string()))?;
+            let float = str::parse::<f64>(&String::from_utf8_lossy(str)).map_err(|err| Error {
+                kind: Kind::Message(err.to_string()),
+                context: vec![Context::Float],
+                span: span!(self),
+            })?;
             let transmuted = u64::from_ne_bytes(float.to_ne_bytes());
             if mantissa.len() > 4 {
-                return Err(Error::ParseFloatMantissaTooLong);
+                return Err(Error {
+                    kind: Kind::ParseFloatMantissaTooLong,
+                    context: vec![Context::Float],
+                    span: span!(self),
+                });
             }
             let (mantissa, mask) = mantissa.iter().fold((0u64, 0u64), |(acc, mask), v| {
                 ((acc << 8) | u64::from(*v), (mask << 8) | 0xFF)
@@ -160,18 +211,29 @@ impl<'de> Deserializer<'de> {
             let transmuted = (transmuted & !mask) | mantissa;
             Ok(f64::from_ne_bytes(transmuted.to_ne_bytes()))
         } else {
-            Ok(str::parse::<f64>(&String::from_utf8_lossy(out))
-                .map_err(|err| Error::Message(err.to_string()))?)
+            Ok(
+                str::parse::<f64>(&String::from_utf8_lossy(out)).map_err(|err| Error {
+                    kind: Kind::Message(err.to_string()),
+                    context: vec![Context::Float],
+                    span: span!(self),
+                })?,
+            )
         }
     }
 
     fn read_symbol(&mut self) -> Result<&'de str> {
-        let length = self.read_packed_int()? as usize;
+        let length = deserialize_len!(self, Context::Symbol);
         let out = self.next_bytes_dyn(length)?;
 
         let mut str = match std::str::from_utf8(out) {
             Ok(a) => a,
-            Err(err) => return Err(Error::SymbolInvalidUTF8(err)),
+            Err(err) => {
+                return Err(Error {
+                    kind: Kind::SymbolInvalidUTF8(err),
+                    context: vec![Context::Symbol],
+                    span: span!(self),
+                });
+            }
         };
 
         if self.remove_ivar_prefix {
@@ -187,10 +249,11 @@ impl<'de> Deserializer<'de> {
     fn read_symlink(&mut self) -> Result<&'de str> {
         let index = self.read_packed_int()? as usize;
 
-        self.sym_table
-            .get(index)
-            .copied()
-            .ok_or(Error::UnresolvedSymlink(index))
+        self.sym_table.get(index).copied().ok_or(Error {
+            kind: Kind::UnresolvedSymlink(index),
+            context: vec![Context::Symbol],
+            span: span!(self),
+        })
     }
 
     // FIXME: FIND BETTER NAME
@@ -198,7 +261,11 @@ impl<'de> Deserializer<'de> {
         match self.next_tag()? {
             Tag::Symbol => self.read_symbol(),
             Tag::Symlink => self.read_symlink(),
-            t => Err(Error::ExpectedSymbol(t)),
+            t => Err(Error {
+                kind: Kind::ExpectedSymbol(t),
+                context: vec![Context::Symbol],
+                span: span!(self),
+            }),
         }
     }
 
@@ -226,7 +293,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
         V: VisitorExt<'de>,
     {
         if !matches!(
-            self.peek_tag()?,
+            bubble_error!(self.peek_tag(), Context::FindingTag),
             Tag::Nil
                 | Tag::True
                 | Tag::False
@@ -238,15 +305,15 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
             self.register_obj();
         }
 
-        match self.next_tag()? {
+        match bubble_error!(self.next_tag(), Context::FindingTag) {
             Tag::Nil => visitor.visit_unit(),
             Tag::True => visitor.visit_bool(true),
             Tag::False => visitor.visit_bool(false),
             Tag::Integer => visitor.visit_i32(self.read_packed_int()?),
             Tag::Float => visitor.visit_f64(self.read_float()?),
             Tag::String => {
-                let len = self.read_packed_int()? as _;
-                let data = self.next_bytes_dyn(len)?.to_vec();
+                let len = deserialize_len!(self, Context::StringText);
+                let data = bubble_error!(self.next_bytes_dyn(len), Context::StringText).to_vec();
 
                 visitor.visit_ruby_string(crate::RbString {
                     data,
@@ -254,7 +321,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
                 })
             }
             Tag::Array => {
-                let len = self.read_packed_int()? as _;
+                let len = deserialize_len!(self, Context::ArrayLen);
 
                 visitor.visit_seq(ArraySeq {
                     deserializer: self,
@@ -263,7 +330,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
                 })
             }
             Tag::Hash => {
-                let len = self.read_packed_int()? as _;
+                let len = deserialize_len!(self, Context::HashLen);
 
                 visitor.visit_map(HashSeq {
                     deserializer: self,
@@ -274,29 +341,50 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
             }
             Tag::Symbol => visitor.visit_symbol(self.read_symbol()?.into()),
             Tag::Symlink => visitor.visit_symbol(self.read_symlink()?.into()),
-            Tag::Instance => match self.next_tag()? {
-                Tag::String => {
-                    let len = self.read_packed_int()? as _;
-                    let data = self.next_bytes_dyn(len)?.to_vec();
+            Tag::Instance => {
+                match bubble_error!(self.next_tag(), Context::Instance) {
+                    Tag::String => {
+                        let len = deserialize_len!(self, Context::Instance, Context::StringText);
+                        let data = bubble_error!(
+                            self.next_bytes_dyn(len),
+                            Context::Instance,
+                            Context::StringText
+                        )
+                        .to_vec();
 
-                    let len = self.read_packed_int()? as _;
-                    let mut fields = crate::value::RbFields::with_capacity(len);
-                    for _ in 0..len {
-                        let key = crate::Symbol::deserialize(&mut *self)?;
-                        let value = crate::Value::deserialize(&mut *self)?;
-                        fields.insert(key, value);
+                        let len = deserialize_len!(self, Context::Instance, Context::StringFields);
+                        let mut fields = crate::value::RbFields::with_capacity(len);
+                        for _ in 0..len {
+                            let key = bubble_error!(
+                                crate::Symbol::deserialize(&mut *self),
+                                Context::Instance,
+                                Context::StringFields,
+                                Context::Key
+                            );
+                            let value = bubble_error!(
+                                crate::Value::deserialize(&mut *self),
+                                Context::Instance,
+                                Context::StringFields,
+                                Context::Value
+                            );
+                            fields.insert(key, value);
+                        }
+
+                        visitor.visit_ruby_string(crate::RbString { data, fields })
                     }
-
-                    visitor.visit_ruby_string(crate::RbString { data, fields })
+                    // This should work. Definitely.
+                    // :ferrisclueless:
+                    _ => Err(Error {
+                        kind: Kind::Unsupported("Instance with raw IVARs"),
+                        context: vec![Context::Instance, Context::FindingTag],
+                        span: span!(self),
+                    }),
                 }
-                // This should work. Definitely.
-                // :ferrisclueless:
-                _ => Err(Error::Unsupported("Instance with raw IVARs")),
-            },
+            }
             Tag::Object => {
-                let class = self.read_symbol_either()?.into();
+                let class = bubble_error!(self.read_symbol_either(), Context::ClassName).into();
 
-                let len = self.read_packed_int()? as _;
+                let len = deserialize_len!(self, Context::ObjectLen);
                 let mut fields = crate::value::RbFields::with_capacity(len);
                 for _ in 0..len {
                     let key = crate::Symbol::deserialize(&mut *self)?;
@@ -309,11 +397,11 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
             Tag::ObjectLink => {
                 let index = self.read_packed_int()? as _;
 
-                let jump_target = self
-                    .objtable
-                    .get(index)
-                    .copied()
-                    .ok_or(Error::UnresolvedObjectlink(index))?;
+                let jump_target = self.objtable.get(index).copied().ok_or(Error {
+                    kind: Kind::UnresolvedObjectlink(index),
+                    context: vec![Context::Objectlink(index)],
+                    span: span!(self),
+                })?;
 
                 self.stack.push(self.input);
                 self.input = jump_target;
@@ -325,8 +413,8 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
                 result
             }
             Tag::UserDef => {
-                let class = self.read_symbol_either()?.into();
-                let len = self.read_packed_int()? as _;
+                let class = bubble_error!(self.read_symbol_either(), Context::ClassName).into();
+                let len = deserialize_len!(self, Context::UserdataLen);
 
                 let data = self.next_bytes_dyn(len)?.to_owned();
 
@@ -352,17 +440,41 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
 
                 result
             }
-            Tag::UserClass => Err(Error::Unsupported(
-                "User class (class inheriting from a default ruby class)",
-            )), // FIXME: make this forward to newtype
-            Tag::RawRegexp => Err(Error::Unsupported("Regex")),
-            Tag::ClassRef => Err(Error::Unsupported("Class Reference")),
-            Tag::ModuleRef => Err(Error::Unsupported("Module Reference")),
-            Tag::Extended => Err(Error::Unsupported("Extended object")),
-            Tag::UserMarshal => Err(Error::Unsupported(
-                "User marshal (object serialized as another)",
-            )), // FIXME: Find better name
-            Tag::Struct => Err(Error::Unsupported("Ruby struct")), // FIXME: change this in the future
+            Tag::UserClass => Err(Error {
+                kind: Kind::Unsupported("User class (class inheriting from a default ruby class)"),
+                context: vec![Context::FindingTag],
+                span: span!(self),
+            }), // FIXME: make this forward to newtype
+            Tag::RawRegexp => Err(Error {
+                kind: Kind::Unsupported("Regex"),
+                context: vec![Context::FindingTag],
+                span: span!(self),
+            }),
+            Tag::ClassRef => Err(Error {
+                kind: Kind::Unsupported("Class Reference"),
+                context: vec![Context::FindingTag],
+                span: span!(self),
+            }),
+            Tag::ModuleRef => Err(Error {
+                kind: Kind::Unsupported("Module Reference"),
+                context: vec![Context::FindingTag],
+                span: span!(self),
+            }),
+            Tag::Extended => Err(Error {
+                kind: Kind::Unsupported("Extended object"),
+                context: vec![Context::FindingTag],
+                span: span!(self),
+            }),
+            Tag::UserMarshal => Err(Error {
+                kind: Kind::Unsupported("User marshal (object serialized as another)"),
+                context: vec![Context::FindingTag],
+                span: span!(self),
+            }), // FIXME: Find better name
+            Tag::Struct => Err(Error {
+                kind: Kind::Unsupported("Ruby struct"),
+                context: vec![Context::FindingTag],
+                span: span!(self),
+            }), // FIXME: change this in the future
         }
     }
 
@@ -409,7 +521,10 @@ impl<'de, 'a> SeqAccess<'de> for ArraySeq<'de, 'a> {
 
         self.index += 1;
 
-        seed.deserialize(&mut *self.deserializer).map(Some)
+        Ok(bubble_error!(
+            seed.deserialize(&mut *self.deserializer).map(Some),
+            Context::Array(self.index)
+        ))
     }
 
     fn size_hint(&self) -> Option<usize> {
@@ -438,8 +553,10 @@ impl<'de, 'a> MapAccess<'de> for HashSeq<'de, 'a> {
         self.deserializer.remove_ivar_prefix = self.remove_ivar_prefix;
 
         self.index += 1;
-
-        seed.deserialize(&mut *self.deserializer).map(Some)
+        Ok(bubble_error!(
+            seed.deserialize(&mut *self.deserializer).map(Some),
+            Context::Key
+        ))
     }
 
     fn next_value_seed<V>(&mut self, seed: V) -> std::result::Result<V::Value, Self::Error>
@@ -448,7 +565,10 @@ impl<'de, 'a> MapAccess<'de> for HashSeq<'de, 'a> {
     {
         self.deserializer.remove_ivar_prefix = false;
 
-        seed.deserialize(&mut *self.deserializer)
+        Ok(bubble_error!(
+            seed.deserialize(&mut *self.deserializer),
+            Context::Key
+        ))
     }
 
     fn size_hint(&self) -> Option<usize> {

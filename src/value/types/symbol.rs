@@ -100,6 +100,12 @@ impl From<String> for Symbol {
     }
 }
 
+impl From<Symbol> for String {
+    fn from(value: Symbol) -> Self {
+        value.0
+    }
+}
+
 impl From<&str> for Symbol {
     fn from(value: &str) -> Self {
         Self(value.to_string())

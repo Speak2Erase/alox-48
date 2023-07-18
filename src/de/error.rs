@@ -14,17 +14,29 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with alox-48.  If not, see <http://www.gnu.org/licenses/>.
+#![allow(missing_docs)]
 
-use std::str::Utf8Error;
+use std::{str::Utf8Error, vec};
 
 use crate::tag::Tag;
 
 /// Type alias around a result.
 pub type Result<T> = std::result::Result<T, Error>;
 
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+#[error("Deserialization error")]
+pub struct Error {
+    #[source]
+    pub kind: Kind,
+    #[label("this bit here")]
+    pub span: miette::SourceSpan,
+    #[related]
+    pub context: Vec<Context>,
+}
+
 /// Error type for this crate.
 #[derive(Debug, thiserror::Error)]
-pub enum Error {
+pub enum Kind {
     /// A length was negative when it should not have been.
     #[error("Unexpected negative length {0}")]
     UnexpectedNegativeLength(i32),
@@ -67,7 +79,7 @@ pub enum Error {
     /// ```
     #[error("Unsupported data encountered: {0}. This is probably because it does not map well to Rust's type system")]
     Unsupported(&'static str),
-    /// ENd of input.
+    /// End of input.
     #[error("End of input.")]
     Eof,
     /// Version mismatch.
@@ -78,20 +90,81 @@ pub enum Error {
     Message(String),
 }
 
-impl serde::ser::Error for Error {
-    fn custom<T>(msg: T) -> Self
-    where
-        T: std::fmt::Display,
-    {
-        Error::Message(msg.to_string())
-    }
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum Context {
+    #[error("While deserializing a struct {0} with {1} fields")]
+    Struct(String, usize),
+    #[error("While deserializing an object {0} with {1} fields")]
+    Object(String, usize),
+    #[error("While deserializing a userdata {0} of len {1}")]
+    Userdata(String, usize),
+    #[error("While deserializing an array of len {0}")]
+    Array(usize),
+    #[error("While deserializing a hash of len {0}")]
+    Hash(usize),
+    #[error("While deserializing a key from a key value pair")]
+    Key,
+    #[error("While deserializing a value from a key value pair")]
+    Value,
+    #[error("While deserializing an object instance")]
+    Instance,
+
+    // Terminals (these happen at the end of a backtrace)
+    #[error("While parsing the marshal version")]
+    ParsingVersion,
+    #[error("While deserializing an object class name")]
+    ClassName,
+    #[error("While deserializing an object len")]
+    ObjectLen,
+    #[error("While deserializing a symbol len")]
+    SymbolLen,
+    #[error("While deserializing a userdata len")]
+    UserdataLen,
+    #[error("While deserializing an array length")]
+    ArrayLen,
+    #[error("While deserializing a hash length")]
+    HashLen,
+    #[error("While parsing the next tag")]
+    FindingTag,
+    #[error("While deserializing a symbol")]
+    Symbol,
+    #[error("While deserializing an already present symbol at {0}")]
+    Symlink(usize),
+    #[error("While deserializing an already present object at {0}")]
+    Objectlink(usize),
+    #[error("While deserializing string text")]
+    StringText,
+    #[error("While deserializing string fields")]
+    StringFields,
+    #[error("While deserializing an integer")]
+    Integer,
+    #[error("While deserializing a float")]
+    Float,
 }
+
+#[allow(unused_macros)]
+macro_rules! bubble_error {
+    ($bubble:expr, $($context:expr),+ $(,)?) => {
+        match $bubble {
+            Ok(o) => o,
+            Err(mut e) => {
+                $(e.context.push($context);)+
+                return Err(e);
+            }
+        }
+    };
+}
+pub(crate) use bubble_error;
 
 impl serde::de::Error for Error {
     fn custom<T>(msg: T) -> Self
     where
         T: std::fmt::Display,
     {
-        Error::Message(msg.to_string())
+        Error {
+            kind: Kind::Message(msg.to_string()),
+            context: vec![],
+            span: (0..0).into(),
+        }
     }
 }

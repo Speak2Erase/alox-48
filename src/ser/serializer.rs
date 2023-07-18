@@ -19,7 +19,8 @@
 use indexmap::IndexSet;
 use serde::ser;
 
-use crate::{Error, Symbol};
+use super::{Context, Error, Kind, Result};
+use crate::Symbol;
 
 /// The `alox_48` serializer.
 ///
@@ -120,7 +121,7 @@ macro_rules! serialize_int {
     ($($int:ty),*) => {
         paste::paste! {
             $(
-                fn [<serialize_ $int>](self, v: $int) -> Result<Self::Ok, Self::Error> {
+                fn [<serialize_ $int>](self, v: $int) -> Result<Self::Ok> {
                     self.append(b'i');
 
                     self.write_int(v as _);
@@ -151,7 +152,7 @@ impl<'a> ser::Serializer for &'a mut Serializer {
 
     type SerializeStructVariant = Self;
 
-    fn serialize_bool(self, v: bool) -> Result<Self::Ok, Self::Error> {
+    fn serialize_bool(self, v: bool) -> Result<Self::Ok> {
         self.append(if v { b'T' } else { b'F' });
 
         Ok(())
@@ -162,11 +163,11 @@ impl<'a> ser::Serializer for &'a mut Serializer {
         u8, u16, u32, u64
     }
 
-    fn serialize_f32(self, v: f32) -> Result<Self::Ok, Self::Error> {
+    fn serialize_f32(self, v: f32) -> Result<Self::Ok> {
         self.serialize_f64(f64::from(v))
     }
 
-    fn serialize_f64(self, v: f64) -> Result<Self::Ok, Self::Error> {
+    fn serialize_f64(self, v: f64) -> Result<Self::Ok> {
         self.append(b'f');
 
         let str = v.to_string();
@@ -177,12 +178,12 @@ impl<'a> ser::Serializer for &'a mut Serializer {
         Ok(())
     }
 
-    fn serialize_char(self, v: char) -> Result<Self::Ok, Self::Error> {
+    fn serialize_char(self, v: char) -> Result<Self::Ok> {
         let mut buf = [0; 4];
         self.serialize_str(v.encode_utf8(&mut buf))
     }
 
-    fn serialize_str(self, v: &str) -> Result<Self::Ok, Self::Error> {
+    fn serialize_str(self, v: &str) -> Result<Self::Ok> {
         // Rust strings are always utf8, so we encode that
         self.append(b'I');
 
@@ -202,7 +203,7 @@ impl<'a> ser::Serializer for &'a mut Serializer {
         Ok(())
     }
 
-    fn serialize_bytes(self, v: &[u8]) -> Result<Self::Ok, Self::Error> {
+    fn serialize_bytes(self, v: &[u8]) -> Result<Self::Ok> {
         eprintln!("warning: serializing bytes is unclear, it will be serialized as a raw string");
 
         self.append(b'"');
@@ -213,26 +214,26 @@ impl<'a> ser::Serializer for &'a mut Serializer {
         Ok(())
     }
 
-    fn serialize_none(self) -> Result<Self::Ok, Self::Error> {
+    fn serialize_none(self) -> Result<Self::Ok> {
         self.append(b'0');
 
         Ok(())
     }
 
-    fn serialize_some<T: ?Sized>(self, value: &T) -> Result<Self::Ok, Self::Error>
+    fn serialize_some<T: ?Sized>(self, value: &T) -> Result<Self::Ok>
     where
         T: serde::Serialize,
     {
         T::serialize(value, self)
     }
 
-    fn serialize_unit(self) -> Result<Self::Ok, Self::Error> {
+    fn serialize_unit(self) -> Result<Self::Ok> {
         self.append(b'0');
 
         Ok(())
     }
 
-    fn serialize_unit_struct(self, name: &'static str) -> Result<Self::Ok, Self::Error> {
+    fn serialize_unit_struct(self, name: &'static str) -> Result<Self::Ok> {
         eprintln!("warning: unit structs do not map well to ruby. serializing as nil");
 
         self.serialize_unit()
@@ -243,19 +244,21 @@ impl<'a> ser::Serializer for &'a mut Serializer {
         name: &'static str,
         variant_index: u32,
         variant: &'static str,
-    ) -> Result<Self::Ok, Self::Error> {
-        Err(Error::Unsupported("enums"))
+    ) -> Result<Self::Ok> {
+        Err(Error {
+            kind: Kind::Unsupported("enums"),
+            context: vec![],
+        })
     }
 
-    fn serialize_newtype_struct<T: ?Sized>(
-        self,
-        name: &'static str,
-        value: &T,
-    ) -> Result<Self::Ok, Self::Error>
+    fn serialize_newtype_struct<T: ?Sized>(self, name: &'static str, value: &T) -> Result<Self::Ok>
     where
         T: serde::Serialize,
     {
-        Err(Error::Unsupported("newtype struct"))
+        Err(Error {
+            kind: Kind::Unsupported("newtype struct"),
+            context: vec![],
+        })
     }
 
     fn serialize_newtype_variant<T: ?Sized>(
@@ -264,16 +267,22 @@ impl<'a> ser::Serializer for &'a mut Serializer {
         variant_index: u32,
         variant: &'static str,
         value: &T,
-    ) -> Result<Self::Ok, Self::Error>
+    ) -> Result<Self::Ok>
     where
         T: serde::Serialize,
     {
-        Err(Error::Unsupported("enums"))
+        Err(Error {
+            kind: Kind::Unsupported("enums"),
+            context: vec![],
+        })
     }
 
-    fn serialize_seq(self, len: Option<usize>) -> Result<Self::SerializeSeq, Self::Error> {
+    fn serialize_seq(self, len: Option<usize>) -> Result<Self::SerializeSeq> {
         let Some(len) = len else {
-            return Err(Error::Unsupported("sequences with no size hint"))
+            return Err(Error {
+                kind: Kind::Unsupported("sequences with no size hints"),
+                context: vec![],
+            });
         }; // FIXME: Find a solution to this
 
         self.append(b'[');
@@ -282,7 +291,7 @@ impl<'a> ser::Serializer for &'a mut Serializer {
         Ok(self)
     }
 
-    fn serialize_tuple(self, len: usize) -> Result<Self::SerializeTuple, Self::Error> {
+    fn serialize_tuple(self, len: usize) -> Result<Self::SerializeTuple> {
         self.append(b'[');
         self.write_int(len as _);
 
@@ -293,8 +302,11 @@ impl<'a> ser::Serializer for &'a mut Serializer {
         self,
         name: &'static str,
         len: usize,
-    ) -> Result<Self::SerializeTupleStruct, Self::Error> {
-        Err(Error::Unsupported("tuple structs"))
+    ) -> Result<Self::SerializeTupleStruct> {
+        Err(Error {
+            kind: Kind::Unsupported("tuple struct"),
+            context: vec![],
+        })
     }
 
     fn serialize_tuple_variant(
@@ -303,13 +315,19 @@ impl<'a> ser::Serializer for &'a mut Serializer {
         variant_index: u32,
         variant: &'static str,
         len: usize,
-    ) -> Result<Self::SerializeTupleVariant, Self::Error> {
-        Err(Error::Unsupported("enums"))
+    ) -> Result<Self::SerializeTupleVariant> {
+        Err(Error {
+            kind: Kind::Unsupported("enums"),
+            context: vec![],
+        })
     }
 
-    fn serialize_map(self, len: Option<usize>) -> Result<Self::SerializeMap, Self::Error> {
+    fn serialize_map(self, len: Option<usize>) -> Result<Self::SerializeMap> {
         let Some(len) = len else {
-            return Err(Error::Unsupported("maps with no size hint"))
+            return Err(Error {
+                kind: Kind::Unsupported("maps with no size hints"),
+                context: vec![],
+            });
         }; // FIXME: Find a solution to this
 
         self.append(b'{');
@@ -318,11 +336,7 @@ impl<'a> ser::Serializer for &'a mut Serializer {
         Ok(self)
     }
 
-    fn serialize_struct(
-        self,
-        name: &'static str,
-        len: usize,
-    ) -> Result<Self::SerializeStruct, Self::Error> {
+    fn serialize_struct(self, name: &'static str, len: usize) -> Result<Self::SerializeStruct> {
         self.append(b'o');
         self.write_symbol(name);
 
@@ -337,8 +351,11 @@ impl<'a> ser::Serializer for &'a mut Serializer {
         variant_index: u32,
         variant: &'static str,
         len: usize,
-    ) -> Result<Self::SerializeStructVariant, Self::Error> {
-        Err(Error::Unsupported("enums"))
+    ) -> Result<Self::SerializeStructVariant> {
+        Err(Error {
+            kind: Kind::Unsupported("enums"),
+            context: vec![],
+        })
     }
 }
 
@@ -347,21 +364,21 @@ impl<'a> ser::SerializeMap for &'a mut Serializer {
 
     type Error = Error;
 
-    fn serialize_key<T: ?Sized>(&mut self, key: &T) -> Result<(), Self::Error>
+    fn serialize_key<T: ?Sized>(&mut self, key: &T) -> Result<()>
     where
         T: serde::Serialize,
     {
         T::serialize(key, &mut **self)
     }
 
-    fn serialize_value<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
+    fn serialize_value<T: ?Sized>(&mut self, value: &T) -> Result<()>
     where
         T: serde::Serialize,
     {
         T::serialize(value, &mut **self)
     }
 
-    fn end(self) -> Result<Self::Ok, Self::Error> {
+    fn end(self) -> Result<Self::Ok> {
         Ok(())
     }
 }
@@ -369,16 +386,16 @@ impl<'a> ser::SerializeMap for &'a mut Serializer {
 impl<'a> ser::SerializeSeq for &'a mut Serializer {
     type Ok = ();
 
-    type Error = crate::Error;
+    type Error = Error;
 
-    fn serialize_element<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
+    fn serialize_element<T: ?Sized>(&mut self, value: &T) -> Result<()>
     where
         T: serde::Serialize,
     {
         T::serialize(value, &mut **self)
     }
 
-    fn end(self) -> Result<Self::Ok, Self::Error> {
+    fn end(self) -> Result<Self::Ok> {
         Ok(())
     }
 }
@@ -386,13 +403,9 @@ impl<'a> ser::SerializeSeq for &'a mut Serializer {
 impl<'a> ser::SerializeStruct for &'a mut Serializer {
     type Ok = ();
 
-    type Error = crate::Error;
+    type Error = Error;
 
-    fn serialize_field<T: ?Sized>(
-        &mut self,
-        key: &'static str,
-        value: &T,
-    ) -> Result<(), Self::Error>
+    fn serialize_field<T: ?Sized>(&mut self, key: &'static str, value: &T) -> Result<()>
     where
         T: serde::Serialize,
     {
@@ -402,7 +415,7 @@ impl<'a> ser::SerializeStruct for &'a mut Serializer {
         Ok(())
     }
 
-    fn end(self) -> Result<Self::Ok, Self::Error> {
+    fn end(self) -> Result<Self::Ok> {
         Ok(())
     }
 }
@@ -410,37 +423,39 @@ impl<'a> ser::SerializeStruct for &'a mut Serializer {
 impl<'a> ser::SerializeStructVariant for &'a mut Serializer {
     type Ok = ();
 
-    type Error = crate::Error;
+    type Error = Error;
 
-    fn serialize_field<T: ?Sized>(
-        &mut self,
-        key: &'static str,
-        value: &T,
-    ) -> Result<(), Self::Error>
+    fn serialize_field<T: ?Sized>(&mut self, key: &'static str, value: &T) -> Result<()>
     where
         T: serde::Serialize,
     {
-        Err(Error::Unsupported("enums"))
+        Err(Error {
+            kind: Kind::Unsupported("enums"),
+            context: vec![],
+        })
     }
 
-    fn end(self) -> Result<Self::Ok, Self::Error> {
-        Err(Error::Unsupported("enums"))
+    fn end(self) -> Result<Self::Ok> {
+        Err(Error {
+            kind: Kind::Unsupported("enums"),
+            context: vec![],
+        })
     }
 }
 
 impl<'a> ser::SerializeTuple for &'a mut Serializer {
     type Ok = ();
 
-    type Error = crate::Error;
+    type Error = Error;
 
-    fn serialize_element<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
+    fn serialize_element<T: ?Sized>(&mut self, value: &T) -> Result<()>
     where
         T: serde::Serialize,
     {
         T::serialize(value, &mut **self)
     }
 
-    fn end(self) -> Result<Self::Ok, Self::Error> {
+    fn end(self) -> Result<Self::Ok> {
         Ok(())
     }
 }
@@ -448,45 +463,57 @@ impl<'a> ser::SerializeTuple for &'a mut Serializer {
 impl<'a> ser::SerializeTupleStruct for &'a mut Serializer {
     type Ok = ();
 
-    type Error = crate::Error;
+    type Error = Error;
 
-    fn serialize_field<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
+    fn serialize_field<T: ?Sized>(&mut self, value: &T) -> Result<()>
     where
         T: serde::Serialize,
     {
-        Err(Error::Unsupported("tuple struct"))
+        Err(Error {
+            kind: Kind::Unsupported("tuple struct"),
+            context: vec![],
+        })
     }
 
-    fn end(self) -> Result<Self::Ok, Self::Error> {
-        Err(Error::Unsupported("tuple struct"))
+    fn end(self) -> Result<Self::Ok> {
+        Err(Error {
+            kind: Kind::Unsupported("tuple struct"),
+            context: vec![],
+        })
     }
 }
 
 impl<'a> ser::SerializeTupleVariant for &'a mut Serializer {
     type Ok = ();
 
-    type Error = crate::Error;
+    type Error = Error;
 
-    fn serialize_field<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
+    fn serialize_field<T: ?Sized>(&mut self, value: &T) -> Result<()>
     where
         T: serde::Serialize,
     {
-        Err(Error::Unsupported("enums"))
+        Err(Error {
+            kind: Kind::Unsupported("enums"),
+            context: vec![],
+        })
     }
 
-    fn end(self) -> Result<Self::Ok, Self::Error> {
-        Err(Error::Unsupported("enums"))
+    fn end(self) -> Result<Self::Ok> {
+        Err(Error {
+            kind: Kind::Unsupported("enums"),
+            context: vec![],
+        })
     }
 }
 
 impl<'a> super::SerializeExt for &'a mut Serializer {
-    fn serialize_symbol(self, symbol: &Symbol) -> Result<Self::Ok, Self::Error> {
+    fn serialize_symbol(self, symbol: &Symbol) -> Result<Self::Ok> {
         self.write_symbol(symbol.as_str());
 
         Ok(())
     }
 
-    fn serialize_ruby_string(self, string: &crate::RbString) -> Result<Self::Ok, Self::Error> {
+    fn serialize_ruby_string(self, string: &crate::RbString) -> Result<Self::Ok> {
         use serde::Serialize;
 
         if !string.fields.is_empty() {
@@ -512,7 +539,7 @@ impl<'a> super::SerializeExt for &'a mut Serializer {
         Ok(())
     }
 
-    fn serialize_userdata(self, class: &Symbol, data: &[u8]) -> Result<Self::Ok, Self::Error> {
+    fn serialize_userdata(self, class: &Symbol, data: &[u8]) -> Result<Self::Ok> {
         self.append(b'u');
         self.write_symbol(class.as_str());
 
@@ -522,11 +549,7 @@ impl<'a> super::SerializeExt for &'a mut Serializer {
         Ok(())
     }
 
-    fn serialize_object(
-        self,
-        class: &Symbol,
-        len: usize,
-    ) -> Result<Self::SerializeObject, Self::Error> {
+    fn serialize_object(self, class: &Symbol, len: usize) -> Result<Self::SerializeObject> {
         self.append(b'o');
         self.write_symbol(class.as_str());
 
@@ -536,7 +559,7 @@ impl<'a> super::SerializeExt for &'a mut Serializer {
 }
 
 impl<'a> super::SerializeObject for &'a mut Serializer {
-    fn serialize_field<T: ?Sized>(&mut self, key: &Symbol, value: &T) -> Result<(), Self::Error>
+    fn serialize_field<T: ?Sized>(&mut self, key: &Symbol, value: &T) -> Result<()>
     where
         T: serde::Serialize,
     {

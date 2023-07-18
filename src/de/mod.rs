@@ -16,7 +16,11 @@
 // along with alox-48.  If not, see <http://www.gnu.org/licenses/>.
 
 mod deserializer;
+mod error;
 mod extension;
 
+pub(crate) use error::{bubble_error, Result};
+
 pub use deserializer::Deserializer;
+pub use error::{Context, Error, Kind};
 pub use extension::VisitorExt;

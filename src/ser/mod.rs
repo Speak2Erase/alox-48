@@ -14,8 +14,12 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with alox-48.  If not, see <http://www.gnu.org/licenses/>.
+mod error;
 mod extension;
 mod serializer;
 
+pub(crate) use error::{bubble_error, Context, Kind, Result};
+
+pub use error::Error;
 pub use extension::{SerializeExt, SerializeObject};
 pub use serializer::Serializer;

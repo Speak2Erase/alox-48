@@ -16,7 +16,7 @@
 // along with alox-48.  If not, see <http://www.gnu.org/licenses/>.
 #![allow(dead_code)]
 
-#[derive(Clone, Copy, Debug, enum_as_inner::EnumAsInner)]
+#[derive(Clone, Copy, Debug)]
 #[repr(u8)]
 pub enum Tag {
     Nil = b'0',
@@ -64,34 +64,32 @@ pub enum Tag {
     UserMarshal = b'U',
 }
 
-impl TryFrom<u8> for Tag {
-    type Error = crate::Error;
-
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
+impl Tag {
+    pub fn from_u8(value: u8) -> Option<Tag> {
         match value {
-            b'0' => Ok(Self::Nil),
-            b'T' => Ok(Self::True),
-            b'F' => Ok(Self::False),
-            b'i' => Ok(Self::Integer),
-            b'f' => Ok(Self::Float),
-            b'\"' => Ok(Self::String),
-            b'[' => Ok(Self::Array),
-            b'{' => Ok(Self::Hash),
-            b'}' => Ok(Self::HashDefault),
-            b':' => Ok(Self::Symbol),
-            b';' => Ok(Self::Symlink),
-            b'I' => Ok(Self::Instance),
-            b'/' => Ok(Self::RawRegexp),
-            b'c' => Ok(Self::ClassRef),
-            b'm' => Ok(Self::ModuleRef),
-            b'o' => Ok(Self::Object),
-            b'@' => Ok(Self::ObjectLink),
-            b'u' => Ok(Self::UserDef),
-            b'S' => Ok(Self::Struct),
-            b'C' => Ok(Self::UserClass),
-            b'e' => Ok(Self::Extended),
-            b'U' => Ok(Self::UserMarshal),
-            _ => Err(crate::Error::WrongTag(value)),
+            b'0' => Some(Tag::Nil),
+            b'T' => Some(Tag::True),
+            b'F' => Some(Tag::False),
+            b'i' => Some(Tag::Integer),
+            b'f' => Some(Tag::Float),
+            b'\"' => Some(Tag::String),
+            b'[' => Some(Tag::Array),
+            b'{' => Some(Tag::Hash),
+            b'}' => Some(Tag::HashDefault),
+            b':' => Some(Tag::Symbol),
+            b';' => Some(Tag::Symlink),
+            b'I' => Some(Tag::Instance),
+            b'/' => Some(Tag::RawRegexp),
+            b'c' => Some(Tag::ClassRef),
+            b'm' => Some(Tag::ModuleRef),
+            b'o' => Some(Tag::Object),
+            b'@' => Some(Tag::ObjectLink),
+            b'u' => Some(Tag::UserDef),
+            b'S' => Some(Tag::Struct),
+            b'C' => Some(Tag::UserClass),
+            b'e' => Some(Tag::Extended),
+            b'U' => Some(Tag::UserMarshal),
+            _ => None,
         }
     }
 }

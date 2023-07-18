@@ -65,8 +65,6 @@ pub(crate) mod tag;
 ///
 /// [`crate::VisitorExt`] is responsible for extending serde.
 pub mod de;
-/// This crate's error type.
-pub mod error;
 /// Marshal serialization.
 ///
 /// [`crate::SerializeExt`] is responsible for extending serde.
@@ -76,15 +74,14 @@ pub mod ser;
 /// Useful for deserializing untyped data.
 pub mod value;
 
-pub use de::{Deserializer, VisitorExt};
-pub use error::{Error, Result};
-pub use ser::{SerializeExt, Serializer};
+pub use de::{Deserializer, Error as DeError, VisitorExt};
+pub use ser::{Error as SerError, SerializeExt, Serializer};
 pub use value::{Object, RbArray, RbHash, RbString, Symbol, Userdata, Value};
 
 /// Deserialize data from some bytes.
 /// It's a convenience function over [`Deserializer::new`] and [`serde::Deserialize`].
 #[allow(clippy::missing_errors_doc)]
-pub fn from_bytes<'de, T>(data: &'de [u8]) -> Result<T>
+pub fn from_bytes<'de, T>(data: &'de [u8]) -> Result<T, DeError>
 where
     T: serde::Deserialize<'de>,
 {
@@ -100,7 +97,7 @@ where
 /// - Enums
 /// - Newtype Structs
 /// - Unit Structs
-pub fn to_bytes<T>(data: T) -> Result<Vec<u8>>
+pub fn to_bytes<T>(data: T) -> Result<Vec<u8>, SerError>
 where
     T: serde::Serialize,
 {

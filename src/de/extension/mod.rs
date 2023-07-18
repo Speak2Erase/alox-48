@@ -71,7 +71,7 @@ pub trait VisitorExt<'de>: Visitor<'de> {
     /// }
     /// ```
     ///
-    /// YOU MUST DESERIAlIZE FIELDS. Not deserializing fields will lead to the deserializer being out of sync!
+    /// YOU MUST DESERIALIZE FIELDS. Not deserializing fields will lead to the deserializer being out of sync!
     #[allow(clippy::missing_errors_doc)]
     fn visit_ruby_string<E>(self, string: RbString) -> Result<Self::Value, E>
     where

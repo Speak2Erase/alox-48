@@ -19,7 +19,6 @@ use serde::Deserialize;
 
 use crate::de::VisitorExt;
 use crate::value::{Object, RbArray, RbHash, RbString, Symbol, Userdata};
-use crate::Error;
 
 use super::Value;
 
