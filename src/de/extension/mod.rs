@@ -15,8 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with alox-48.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::{Object, RbString, Symbol, Userdata};
-use serde::de::Error as SerdeError;
+use crate::{DeError, Object, RbString, Symbol, Userdata};
 use serde::de::Visitor;
 
 mod impls;
@@ -38,27 +37,21 @@ pub trait VisitorExt<'de>: Visitor<'de> {
     ///
     /// # Errors
     /// Errors by default.
-    fn visit_userdata<E>(self, userdata: Userdata) -> Result<Self::Value, E>
-    where
-        E: SerdeError;
+    fn visit_userdata(self, userdata: Userdata) -> Result<Self::Value, DeError>;
 
     /// For deserializing ruby objects in general.
     /// It's different to how deserializing structs normally works in serde, as you get a class name.
     ///
     /// Forwards to [`Visitor::visit_map`] by default.
     #[allow(clippy::missing_errors_doc)]
-    fn visit_object<E>(self, object: Object) -> Result<Self::Value, E>
-    where
-        E: SerdeError;
+    fn visit_object(self, object: Object) -> Result<Self::Value, DeError>;
 
     /// For deserializing ruby symbols.
     /// Only exists to distinguish between strings and symbols.
     ///
     /// Forwards to [`Visitor::visit_borrowed_str`] by default.
     #[allow(clippy::missing_errors_doc)]
-    fn visit_symbol<E>(self, sym: Symbol) -> Result<Self::Value, E>
-    where
-        E: SerdeError;
+    fn visit_symbol(self, sym: Symbol) -> Result<Self::Value, DeError>;
 
     /// For deserializing ruby strings which may or may not be utf8.
     /// You will also get any extra fields attached to the string, like the encoding (as that is a thing in ruby)
@@ -73,7 +66,5 @@ pub trait VisitorExt<'de>: Visitor<'de> {
     ///
     /// YOU MUST DESERIALIZE FIELDS. Not deserializing fields will lead to the deserializer being out of sync!
     #[allow(clippy::missing_errors_doc)]
-    fn visit_ruby_string<E>(self, string: RbString) -> Result<Self::Value, E>
-    where
-        E: SerdeError;
+    fn visit_ruby_string(self, string: RbString) -> Result<Self::Value, DeError>;
 }

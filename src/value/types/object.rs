@@ -15,6 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with alox-48.  If not, see <http://www.gnu.org/licenses/>.
 use super::{RbFields, Symbol};
+use crate::DeError;
 
 /// A type equivalent to ruby's `Object`.
 #[derive(PartialEq, Eq, Default, Debug, Clone)]
@@ -57,10 +58,7 @@ impl<'de> serde::Deserialize<'de> for Object {
         }
 
         impl<'de> crate::VisitorExt<'de> for ObjectVisitor {
-            fn visit_object<E>(self, object: Object) -> Result<Self::Value, E>
-            where
-                E: serde::de::Error,
-            {
+            fn visit_object(self, object: Object) -> Result<Self::Value, DeError> {
                 Ok(object)
             }
         }

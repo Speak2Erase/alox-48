@@ -15,6 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with alox-48.  If not, see <http://www.gnu.org/licenses/>.
 use super::RbFields;
+use crate::DeError;
 
 /// A type equivalent to ruby's `String`.
 /// ruby strings do not have to be utf8 encoded, so this type uses [`Vec<u8>`] instead.
@@ -110,10 +111,7 @@ impl<'de> serde::Deserialize<'de> for RbString {
         }
 
         impl<'de> crate::VisitorExt<'de> for StringVisitor {
-            fn visit_ruby_string<E>(self, string: RbString) -> Result<Self::Value, E>
-            where
-                E: serde::de::Error,
-            {
+            fn visit_ruby_string(self, string: RbString) -> Result<Self::Value, DeError> {
                 Ok(string)
             }
         }

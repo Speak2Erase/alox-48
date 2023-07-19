@@ -15,30 +15,20 @@
 // You should have received a copy of the GNU General Public License
 // along with alox-48.  If not, see <http://www.gnu.org/licenses/>.
 
-use serde::de::Error as SerdeError;
-use serde::de::{Unexpected, Visitor};
+use serde::de::{Error as _, Unexpected, Visitor};
 
 use super::VisitorExt;
-use crate::{Object, RbString, Symbol, Userdata};
+use crate::{DeError, Object, RbString, Symbol, Userdata};
 
 impl<'de, T> VisitorExt<'de> for T
 where
     T: Visitor<'de>,
 {
-    default fn visit_userdata<E>(self, _userdata: Userdata) -> Result<Self::Value, E>
-    where
-        E: SerdeError,
-    {
-        Err(SerdeError::invalid_type(
-            Unexpected::Other("userdata"),
-            &self,
-        ))
+    default fn visit_userdata(self, _userdata: Userdata) -> Result<Self::Value, DeError> {
+        Err(DeError::invalid_type(Unexpected::Other("userdata"), &self))
     }
 
-    default fn visit_object<E>(self, object: Object) -> Result<Self::Value, E>
-    where
-        E: SerdeError,
-    {
+    default fn visit_object(self, object: Object) -> Result<Self::Value, DeError> {
         let fields = serde::de::value::MapDeserializer::new(
             object
                 .fields
@@ -48,18 +38,12 @@ where
         self.visit_map(fields)
     }
 
-    default fn visit_symbol<E>(self, sym: Symbol) -> Result<Self::Value, E>
-    where
-        E: SerdeError,
-    {
+    default fn visit_symbol(self, sym: Symbol) -> Result<Self::Value, DeError> {
         self.visit_string(sym.to_string())
     }
 
     #[allow(unused_imports, unused_variables)]
-    default fn visit_ruby_string<E>(self, string: RbString) -> Result<Self::Value, E>
-    where
-        E: SerdeError,
-    {
+    default fn visit_ruby_string(self, string: RbString) -> Result<Self::Value, DeError> {
         use crate::Value;
 
         #[cfg(feature = "warn-encoding")]
@@ -99,31 +83,19 @@ where
 
 /// Default implementation for [`VisitorExt`].
 impl<'de> VisitorExt<'de> for serde::de::IgnoredAny {
-    fn visit_userdata<E>(self, _userdata: Userdata) -> Result<Self::Value, E>
-    where
-        E: SerdeError,
-    {
+    fn visit_userdata(self, _userdata: Userdata) -> Result<Self::Value, DeError> {
         Ok(serde::de::IgnoredAny)
     }
 
-    fn visit_object<E>(self, _object: Object) -> Result<Self::Value, E>
-    where
-        E: SerdeError,
-    {
+    fn visit_object(self, _object: Object) -> Result<Self::Value, DeError> {
         Ok(serde::de::IgnoredAny)
     }
 
-    fn visit_symbol<E>(self, _sym: Symbol) -> Result<Self::Value, E>
-    where
-        E: SerdeError,
-    {
+    fn visit_symbol(self, _sym: Symbol) -> Result<Self::Value, DeError> {
         Ok(serde::de::IgnoredAny)
     }
 
-    fn visit_ruby_string<E>(self, _str: RbString) -> Result<Self::Value, E>
-    where
-        E: SerdeError,
-    {
+    fn visit_ruby_string(self, _str: RbString) -> Result<Self::Value, DeError> {
         Ok(serde::de::IgnoredAny)
     }
 }

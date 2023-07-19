@@ -14,6 +14,7 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with alox-48.  If not, see <http://www.gnu.org/licenses/>.
+use crate::DeError;
 
 /// A symbol from ruby.
 /// It's a newtype around a String, meant to preserve types during (de)serialization.
@@ -82,10 +83,7 @@ impl<'de> serde::Deserialize<'de> for Symbol {
         }
 
         impl<'de> crate::VisitorExt<'de> for SymbolVisitor {
-            fn visit_symbol<E>(self, sym: Symbol) -> Result<Self::Value, E>
-            where
-                E: serde::de::Error,
-            {
+            fn visit_symbol(self, sym: Symbol) -> Result<Self::Value, DeError> {
                 Ok(sym)
             }
         }

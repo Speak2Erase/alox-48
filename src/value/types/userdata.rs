@@ -15,6 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with alox-48.  If not, see <http://www.gnu.org/licenses/>.
 use super::Symbol;
+use crate::DeError;
 
 /// This type represents types serialized with `_dump` from ruby.
 /// Its main intended use is in [`Value`], but you can also use it with [`serde::Deserialize`]:
@@ -86,10 +87,7 @@ impl<'de> serde::Deserialize<'de> for Userdata {
         }
 
         impl<'de> crate::VisitorExt<'de> for UserdataVisitor {
-            fn visit_userdata<E>(self, userdata: Userdata) -> Result<Self::Value, E>
-            where
-                E: serde::de::Error,
-            {
+            fn visit_userdata(self, userdata: Userdata) -> Result<Self::Value, DeError> {
                 Ok(userdata)
             }
         }

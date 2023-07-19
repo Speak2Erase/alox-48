@@ -19,6 +19,7 @@ use serde::Deserialize;
 
 use crate::de::VisitorExt;
 use crate::value::{Object, RbArray, RbHash, RbString, Symbol, Userdata};
+use crate::DeError;
 
 use super::Value;
 
@@ -120,31 +121,19 @@ impl<'de> serde::Deserialize<'de> for Value {
         }
 
         impl<'de> VisitorExt<'de> for ValueVisitor {
-            fn visit_object<E>(self, object: Object) -> Result<Self::Value, E>
-            where
-                E: serde::de::Error,
-            {
+            fn visit_object(self, object: Object) -> Result<Self::Value, DeError> {
                 Ok(Value::Object(object))
             }
 
-            fn visit_userdata<E>(self, userdata: Userdata) -> Result<Self::Value, E>
-            where
-                E: serde::de::Error,
-            {
+            fn visit_userdata(self, userdata: Userdata) -> Result<Self::Value, DeError> {
                 Ok(Value::Userdata(userdata))
             }
 
-            fn visit_symbol<E>(self, sym: Symbol) -> Result<Self::Value, E>
-            where
-                E: serde::de::Error,
-            {
+            fn visit_symbol(self, sym: Symbol) -> Result<Self::Value, DeError> {
                 Ok(Value::Symbol(sym))
             }
 
-            fn visit_ruby_string<E>(self, string: RbString) -> Result<Self::Value, E>
-            where
-                E: serde::de::Error,
-            {
+            fn visit_ruby_string(self, string: RbString) -> Result<Self::Value, DeError> {
                 Ok(Value::String(string))
             }
         }
@@ -153,36 +142,22 @@ impl<'de> serde::Deserialize<'de> for Value {
     }
 }
 
-pub struct ValueDeserializer<E> {
-    value: Value,
-    fuck: std::marker::PhantomData<E>,
-}
-
-impl<'de, E> serde::de::IntoDeserializer<'de, E> for Value
-where
-    E: serde::de::Error,
-{
-    type Deserializer = ValueDeserializer<E>;
+impl<'de> serde::de::IntoDeserializer<'de, DeError> for Value {
+    type Deserializer = Self;
 
     fn into_deserializer(self) -> Self::Deserializer {
-        ValueDeserializer {
-            value: self,
-            fuck: std::marker::PhantomData,
-        }
+        self
     }
 }
 
-impl<'de, E> serde::Deserializer<'de> for ValueDeserializer<E>
-where
-    E: serde::de::Error,
-{
-    type Error = E;
+impl<'de> serde::Deserializer<'de> for Value {
+    type Error = DeError;
 
     fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: VisitorExt<'de>,
     {
-        match self.value {
+        match self {
             Value::Nil => visitor.visit_unit(),
             Value::Bool(v) => visitor.visit_bool(v),
             Value::Float(v) => visitor.visit_f64(v),
