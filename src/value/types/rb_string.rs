@@ -31,14 +31,13 @@ pub struct RbString {
     pub fields: RbFields,
 }
 
+#[allow(clippy::must_use_candidate)]
 impl RbString {
-    #[must_use]
     /// Return the encoding of this string, if it has one.
     pub fn encoding(&self) -> Option<&crate::Value> {
         self.fields.get("E").or_else(|| self.fields.get("encoding"))
     }
 
-    #[must_use]
     /// Uses [`String::from_utf8_lossy`] to convert this string to rust string in a lossy manner.
     pub fn to_string_lossy(&self) -> std::borrow::Cow<'_, str> {
         String::from_utf8_lossy(&self.data)
@@ -230,7 +229,7 @@ impl From<&[u8]> for RbString {
     fn from(value: &[u8]) -> Self {
         Self {
             data: value.to_vec(),
-            fields: Default::default(),
+            fields: indexmap::IndexMap::default(),
         }
     }
 }
@@ -239,7 +238,7 @@ impl From<Vec<u8>> for RbString {
     fn from(value: Vec<u8>) -> Self {
         Self {
             data: value,
-            fields: Default::default(),
+            fields: indexmap::IndexMap::default(),
         }
     }
 }

@@ -95,18 +95,18 @@ impl<'de> VisitorExt<'de> for serde::de::IgnoredAny {
         Ok(serde::de::IgnoredAny)
     }
 
-    fn visit_object<A>(self, class: &'de str, fields: A) -> Result<Self::Value, DeError>
+    fn visit_object<A>(self, _class: &'de str, _fields: A) -> Result<Self::Value, DeError>
     where
         A: serde::de::MapAccess<'de, Error = DeError>,
     {
         Ok(serde::de::IgnoredAny)
     }
 
-    fn visit_symbol(self, sym: &'de str) -> Result<Self::Value, DeError> {
+    fn visit_symbol(self, _sym: &'de str) -> Result<Self::Value, DeError> {
         Ok(serde::de::IgnoredAny)
     }
 
-    fn visit_ruby_string<A>(self, data: &'de [u8], fields: A) -> Result<Self::Value, DeError>
+    fn visit_ruby_string<A>(self, _data: &'de [u8], _fields: A) -> Result<Self::Value, DeError>
     where
         A: serde::de::MapAccess<'de, Error = DeError>,
     {

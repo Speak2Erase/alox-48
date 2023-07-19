@@ -35,7 +35,7 @@ impl serde::Serialize for Object {
 
         let mut s = serializer.serialize_object(&self.class, self.fields.len())?;
 
-        for (k, v) in self.fields.iter() {
+        for (k, v) in &self.fields {
             s.serialize_field(k, v)?;
         }
         s.end()
@@ -107,7 +107,7 @@ impl std::hash::Hash for Object {
         self.class.hash(state);
         self.fields.len().hash(state);
 
-        for (var, field) in self.fields.iter() {
+        for (var, field) in &self.fields {
             var.hash(state);
             field.hash(state);
         }

@@ -233,7 +233,7 @@ impl std::hash::Hash for Value {
             Value::Array(v) => v.hash(state),
             Value::Hash(h) => {
                 h.len().hash(state);
-                for (key, value) in h.iter() {
+                for (key, value) in h {
                     key.hash(state);
                     value.hash(state);
                 }

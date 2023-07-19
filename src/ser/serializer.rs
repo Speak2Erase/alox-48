@@ -14,12 +14,12 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with alox-48.  If not, see <http://www.gnu.org/licenses/>.
-#![allow(unused_variables)]
+#![allow(unused_variables, clippy::cast_possible_wrap)]
 
 use indexmap::IndexSet;
 use serde::ser;
 
-use super::{Context, Error, Kind, Result};
+use super::{Error, Kind, Result};
 use crate::Symbol;
 
 /// The `alox_48` serializer.
@@ -530,7 +530,7 @@ impl<'a> super::SerializeExt for &'a mut Serializer {
             // Write the field len of 1
             self.write_int(1);
 
-            for (k, v) in string.fields.iter() {
+            for (k, v) in &string.fields {
                 k.serialize(&mut *self)?;
                 v.serialize(&mut *self)?;
             }

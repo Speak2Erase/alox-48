@@ -23,6 +23,7 @@ use crate::{DeError, VisitorExt};
 #[derive(Hash, PartialEq, Eq, Default, Clone)]
 pub struct Symbol(pub String);
 
+#[allow(clippy::must_use_candidate)]
 impl Symbol {
     pub fn as_str(&self) -> &str {
         &self.0
