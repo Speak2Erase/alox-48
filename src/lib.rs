@@ -134,7 +134,7 @@ mod ints {
 
         let bytes = crate::to_bytes(&value).unwrap();
 
-        let value2 = crate::from_bytes(&bytes).unwrap();
+        let value2: crate::Value = crate::from_bytes(&bytes).unwrap();
 
         assert_eq!(value, value2);
     }
@@ -362,5 +362,52 @@ mod misc {
         for sym in symbols.windows(2) {
             assert_eq!(sym[0].as_ptr(), sym[1].as_ptr());
         }
+    }
+}
+
+#[cfg(test)]
+mod value_test {
+    #[test]
+    fn untyped_object() {
+        let bytes = &[
+            0x04, 0x08, 0x6f, 0x3a, 0x09, 0x54, 0x65, 0x73, 0x74, 0x07, 0x3a, 0x0c, 0x40, 0x66,
+            0x69, 0x65, 0x6c, 0x64, 0x31, 0x54, 0x3a, 0x0c, 0x40, 0x66, 0x69, 0x65, 0x6c, 0x64,
+            0x32, 0x49, 0x22, 0x10, 0x68, 0x65, 0x6c, 0x6c, 0x6f, 0x20, 0x74, 0x68, 0x65, 0x72,
+            0x65, 0x06, 0x3a, 0x06, 0x45, 0x54,
+        ];
+
+        let obj: crate::Value = crate::from_bytes(bytes).unwrap();
+        let obj = obj.into_object().unwrap();
+
+        assert_eq!(obj.class, "Test");
+        assert_eq!(obj.fields["field1"], true);
+    }
+
+    #[test]
+    fn untyped_to_borrowed() {
+        #[derive(serde::Deserialize, serde::Serialize, PartialEq, Debug)]
+        struct Test<'d> {
+            field1: bool,
+            field2: &'d str,
+        }
+
+        let bytes = &[
+            0x04, 0x08, 0x6f, 0x3a, 0x09, 0x54, 0x65, 0x73, 0x74, 0x07, 0x3a, 0x0c, 0x40, 0x66,
+            0x69, 0x65, 0x6c, 0x64, 0x31, 0x54, 0x3a, 0x0c, 0x40, 0x66, 0x69, 0x65, 0x6c, 0x64,
+            0x32, 0x49, 0x22, 0x10, 0x68, 0x65, 0x6c, 0x6c, 0x6f, 0x20, 0x74, 0x68, 0x65, 0x72,
+            0x65, 0x06, 0x3a, 0x06, 0x45, 0x54,
+        ];
+
+        let obj: crate::Value = crate::from_bytes(bytes).unwrap();
+
+        let test: Test<'_> = serde::Deserialize::deserialize(&obj).unwrap();
+
+        assert_eq!(
+            test,
+            Test {
+                field1: true,
+                field2: "hello there"
+            }
+        );
     }
 }

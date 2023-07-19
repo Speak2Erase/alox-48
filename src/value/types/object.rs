@@ -76,10 +76,37 @@ impl<'de> serde::Deserialize<'de> for Object {
     }
 }
 
+impl<'de> serde::Deserializer<'de> for &'de Object {
+    type Error = DeError;
+
+    fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: crate::VisitorExt<'de>,
+    {
+        let fields = serde::de::value::MapDeserializer::new(self.fields.iter());
+        visitor.visit_object(self.class.as_str(), fields)
+    }
+
+    serde::forward_to_deserialize_any! {
+        bool i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 f32 f64 char str
+        string bytes byte_buf unit unit_struct newtype_struct seq tuple
+        option tuple_struct map struct enum identifier ignored_any
+    }
+}
+
+impl<'de> serde::de::IntoDeserializer<'de, DeError> for &'de Object {
+    type Deserializer = Self;
+
+    fn into_deserializer(self) -> Self::Deserializer {
+        self
+    }
+}
+
 impl std::hash::Hash for Object {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.class.hash(state);
         self.fields.len().hash(state);
+
         for (var, field) in self.fields.iter() {
             var.hash(state);
             field.hash(state);

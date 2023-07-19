@@ -14,7 +14,7 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with alox-48.  If not, see <http://www.gnu.org/licenses/>.
-use super::Value;
+use super::{Object, RbArray, RbHash, RbString, Symbol, Userdata, Value};
 
 impl std::fmt::Debug for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -111,6 +111,108 @@ impl PartialEq for Value {
                     false
                 }
             }
+        }
+    }
+}
+
+impl PartialEq<bool> for Value {
+    fn eq(&self, other: &bool) -> bool {
+        match self {
+            Value::Bool(v) => other == v,
+            _ => false,
+        }
+    }
+}
+
+impl PartialEq<i64> for Value {
+    fn eq(&self, other: &i64) -> bool {
+        match self {
+            Value::Integer(v) => other == v,
+            _ => false,
+        }
+    }
+}
+
+impl PartialEq<f64> for Value {
+    fn eq(&self, other: &f64) -> bool {
+        match self {
+            Value::Float(v) => other == v,
+            _ => false,
+        }
+    }
+}
+
+impl PartialEq<String> for Value {
+    fn eq(&self, other: &String) -> bool {
+        match self {
+            Value::String(v) => other.as_bytes() == v.as_slice(),
+            Value::Symbol(v) => other.as_str() == v.as_str(),
+            _ => false,
+        }
+    }
+}
+
+impl PartialEq<str> for Value {
+    fn eq(&self, other: &str) -> bool {
+        match self {
+            Value::String(v) => other.as_bytes() == v.as_slice(),
+            Value::Symbol(v) => other == v.as_str(),
+            _ => false,
+        }
+    }
+}
+
+impl PartialEq<RbString> for Value {
+    fn eq(&self, other: &RbString) -> bool {
+        match self {
+            Value::String(v) => other == v,
+            _ => false,
+        }
+    }
+}
+
+impl PartialEq<Symbol> for Value {
+    fn eq(&self, other: &Symbol) -> bool {
+        match self {
+            Value::Symbol(v) => other == v,
+            _ => false,
+        }
+    }
+}
+
+impl PartialEq<Object> for Value {
+    fn eq(&self, other: &Object) -> bool {
+        match self {
+            Value::Object(v) => other == v,
+            _ => false,
+        }
+    }
+}
+
+impl PartialEq<Userdata> for Value {
+    fn eq(&self, other: &Userdata) -> bool {
+        match self {
+            Value::Userdata(v) => other == v,
+            _ => false,
+        }
+    }
+}
+
+// TODO: PartialEq for T where Value: PartialEq<T> in a Vec<T>
+impl PartialEq<RbArray> for Value {
+    fn eq(&self, other: &RbArray) -> bool {
+        match self {
+            Value::Array(v) => other == v,
+            _ => false,
+        }
+    }
+}
+
+impl PartialEq<RbHash> for Value {
+    fn eq(&self, other: &RbHash) -> bool {
+        match self {
+            Value::Hash(v) => other == v,
+            _ => false,
         }
     }
 }

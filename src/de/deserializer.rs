@@ -223,7 +223,7 @@ impl<'de> Deserializer<'de> {
         let length = deserialize_len!(self, Context::Symbol);
         let out = self.next_bytes_dyn(length)?;
 
-        let mut str = match std::str::from_utf8(out) {
+        let str = match std::str::from_utf8(out) {
             Ok(a) => a,
             Err(err) => {
                 return Err(Error {
@@ -360,8 +360,8 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
 
                 Ok(result)
             }
-            Tag::Symbol => visitor.visit_symbol(self.read_symbol()?.into()),
-            Tag::Symlink => visitor.visit_symbol(self.read_symlink()?.into()),
+            Tag::Symbol => visitor.visit_symbol(self.read_symbol()?),
+            Tag::Symlink => visitor.visit_symbol(self.read_symlink()?),
             // Honestly, I have no idea why this is a thing...
             // Instance is extremely unclear and I've never seen Marshal data with it prefixing anything but a string.
             Tag::Instance => {

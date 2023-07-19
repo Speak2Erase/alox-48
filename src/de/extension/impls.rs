@@ -60,7 +60,7 @@ where
                 if matches!(key, "E" | "encoding") {
                     match fields.next_value()? {
                         Value::Bool(b) if !b => {
-                            eprintln!("warning: converting ascii ruby string to utf8")
+                            eprintln!("warning: converting ascii ruby string to utf8");
                         }
                         Value::Bool(b) if b => (),
                         Value::String(s) => {
