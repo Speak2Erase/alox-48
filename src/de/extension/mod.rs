@@ -59,7 +59,7 @@ pub trait VisitorExt<'de>: Visitor<'de> {
     /// You will also get any extra fields attached to the string, like the encoding (as that is a thing in ruby)
     ///
     /// By default, it uses [`String::from_utf8_lossy`] and matches the resulting [`std::borrow::Cow`] like this:
-    /// ```no_run
+    /// ```ignore
     /// match str {
     ///     std::borrow::Cow::Borrowed(str) => self.visit_borrowed_str(str),
     ///     std::borrow::Cow::Owned(str) => self.visit_string(str),
