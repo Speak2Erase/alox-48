@@ -39,7 +39,6 @@ pub struct Deserializer<'de> {
     objtable: Vec<&'de [u8]>,
     sym_table: Vec<&'de str>,
     stack: Vec<&'de [u8]>,
-    remove_ivar_prefix: bool,
     blacklisted_objects: BTreeSet<&'de [u8]>,
 }
 
@@ -93,7 +92,6 @@ impl<'de> Deserializer<'de> {
             objtable: vec![],
             sym_table: vec![],
             stack: vec![],
-            remove_ivar_prefix: false,
             blacklisted_objects: BTreeSet::new(),
         })
     }
@@ -236,10 +234,6 @@ impl<'de> Deserializer<'de> {
             }
         };
 
-        if self.remove_ivar_prefix {
-            str = &str[1..];
-        }
-
         if self.stack.is_empty() {
             self.sym_table.push(str);
         }
@@ -313,34 +307,63 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
             Tag::Float => visitor.visit_f64(self.read_float()?),
             Tag::String => {
                 let len = deserialize_len!(self, Context::StringText);
-                let data = bubble_error!(self.next_bytes_dyn(len), Context::StringText).to_vec();
+                let data = bubble_error!(self.next_bytes_dyn(len), Context::StringText);
 
-                visitor.visit_ruby_string(crate::RbString {
+                let mut index = 0;
+                let result = visitor.visit_ruby_string(
                     data,
-                    ..Default::default()
-                })
+                    HashSeq {
+                        deserializer: self,
+                        len: 0,
+                        index: &mut index,
+                    },
+                )?;
+                // We don't need to deserialize anything else as this is a bare string.
+                Ok(result)
             }
             Tag::Array => {
                 let len = deserialize_len!(self, Context::ArrayLen);
+                let mut index = 0;
 
-                visitor.visit_seq(ArraySeq {
+                let result = visitor.visit_seq(ArraySeq {
                     deserializer: self,
                     len,
-                    index: 0,
-                })
+                    index: &mut index,
+                })?;
+
+                // Deserialize remaining elements that weren't deserialized
+                while index < len {
+                    index += 1;
+                    serde::de::IgnoredAny::deserialize(&mut *self)?;
+                }
+
+                Ok(result)
             }
             Tag::Hash => {
                 let len = deserialize_len!(self, Context::HashLen);
+                let mut index = 0;
 
-                visitor.visit_map(HashSeq {
+                let result = visitor.visit_map(HashSeq {
                     deserializer: self,
                     len,
-                    index: 0,
-                    remove_ivar_prefix: false,
-                })
+                    index: &mut index,
+                })?;
+
+                // Deserialize remaining elements that weren't deserialized
+                while index < len {
+                    index += 1;
+                    // Key
+                    serde::de::IgnoredAny::deserialize(&mut *self)?;
+                    // Value
+                    serde::de::IgnoredAny::deserialize(&mut *self)?;
+                }
+
+                Ok(result)
             }
             Tag::Symbol => visitor.visit_symbol(self.read_symbol()?.into()),
             Tag::Symlink => visitor.visit_symbol(self.read_symlink()?.into()),
+            // Honestly, I have no idea why this is a thing...
+            // Instance is extremely unclear and I've never seen Marshal data with it prefixing anything but a string.
             Tag::Instance => {
                 match bubble_error!(self.next_tag(), Context::Instance) {
                     Tag::String => {
@@ -349,28 +372,30 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
                             self.next_bytes_dyn(len),
                             Context::Instance,
                             Context::StringText
-                        )
-                        .to_vec();
+                        );
 
                         let len = deserialize_len!(self, Context::Instance, Context::StringFields);
-                        let mut fields = crate::value::RbFields::with_capacity(len);
-                        for _ in 0..len {
-                            let key = bubble_error!(
-                                crate::Symbol::deserialize(&mut *self),
-                                Context::Instance,
-                                Context::StringFields,
-                                Context::Key
-                            );
-                            let value = bubble_error!(
-                                crate::Value::deserialize(&mut *self),
-                                Context::Instance,
-                                Context::StringFields,
-                                Context::Value
-                            );
-                            fields.insert(key, value);
+                        let mut index = 0;
+
+                        let result = visitor.visit_ruby_string(
+                            data,
+                            HashSeq {
+                                deserializer: self,
+                                len,
+                                index: &mut index,
+                            },
+                        )?;
+
+                        // Deserialize remaining elements that weren't deserialized
+                        while index < len {
+                            index += 1;
+                            // Key
+                            serde::de::IgnoredAny::deserialize(&mut *self)?;
+                            // Value
+                            serde::de::IgnoredAny::deserialize(&mut *self)?;
                         }
 
-                        visitor.visit_ruby_string(crate::RbString { data, fields })
+                        Ok(result)
                     }
                     // This should work. Definitely.
                     // :ferrisclueless:
@@ -382,17 +407,30 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
                 }
             }
             Tag::Object => {
-                let class = bubble_error!(self.read_symbol_either(), Context::ClassName).into();
+                let class = bubble_error!(self.read_symbol_either(), Context::ClassName);
 
                 let len = deserialize_len!(self, Context::ObjectLen);
-                let mut fields = crate::value::RbFields::with_capacity(len);
-                for _ in 0..len {
-                    let key = crate::Symbol::deserialize(&mut *self)?;
-                    let value = crate::Value::deserialize(&mut *self)?;
-                    fields.insert(key, value);
+                let mut index = 0;
+
+                let result = visitor.visit_object(
+                    class,
+                    ObjSeq {
+                        deserializer: self,
+                        len,
+                        index: &mut index,
+                    },
+                )?;
+
+                // Deserialize remaining elements that weren't deserialized
+                while index < len {
+                    index += 1;
+                    // Key
+                    serde::de::IgnoredAny::deserialize(&mut *self)?;
+                    // Value
+                    serde::de::IgnoredAny::deserialize(&mut *self)?;
                 }
 
-                visitor.visit_object(crate::Object { class, fields })
+                Ok(result)
             }
             Tag::ObjectLink => {
                 let index = self.read_packed_int()? as _;
@@ -413,30 +451,38 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
                 result
             }
             Tag::UserDef => {
-                let class = bubble_error!(self.read_symbol_either(), Context::ClassName).into();
+                let class = bubble_error!(self.read_symbol_either(), Context::ClassName);
                 let len = deserialize_len!(self, Context::UserdataLen);
 
-                let data = self.next_bytes_dyn(len)?.to_owned();
+                let data = self.next_bytes_dyn(len)?;
 
-                visitor.visit_userdata(crate::Userdata { class, data })
+                visitor.visit_userdata(class, data)
             }
-
             // FIXME: lazy
             Tag::HashDefault => {
                 let len = self.read_packed_int()? as _;
+                let mut index = 0;
 
                 let result = visitor.visit_map(HashSeq {
                     deserializer: self,
                     len,
-                    index: 0,
-                    remove_ivar_prefix: false,
+                    index: &mut index,
                 });
+
+                // Deserialize remaining elements that weren't deserialized
+                while index < len {
+                    index += 1;
+                    // Key
+                    serde::de::IgnoredAny::deserialize(&mut *self)?;
+                    // Value
+                    serde::de::IgnoredAny::deserialize(&mut *self)?;
+                }
 
                 // Ignore the default value.
                 // This should work.
                 // Probably.
                 // :)
-                serde::de::IgnoredAny::deserialize(self)?;
+                serde::de::IgnoredAny::deserialize(&mut *self)?;
 
                 result
             }
@@ -502,7 +548,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
 struct ArraySeq<'de, 'a> {
     deserializer: &'a mut Deserializer<'de>,
     len: usize,
-    index: usize,
+    index: &'a mut usize,
 }
 
 impl<'de, 'a> SeqAccess<'de> for ArraySeq<'de, 'a> {
@@ -515,28 +561,27 @@ impl<'de, 'a> SeqAccess<'de> for ArraySeq<'de, 'a> {
     where
         T: de::DeserializeSeed<'de>,
     {
-        if self.index >= self.len {
+        if *self.index >= self.len {
             return Ok(None);
         }
 
-        self.index += 1;
+        *self.index += 1;
 
         Ok(bubble_error!(
             seed.deserialize(&mut *self.deserializer).map(Some),
-            Context::Array(self.index)
+            Context::Array(self.len)
         ))
     }
 
     fn size_hint(&self) -> Option<usize> {
-        Some(self.len - self.index)
+        Some(self.len - *self.index)
     }
 }
 
 struct HashSeq<'de, 'a> {
     deserializer: &'a mut Deserializer<'de>,
     len: usize,
-    index: usize,
-    remove_ivar_prefix: bool,
+    index: &'a mut usize,
 }
 
 impl<'de, 'a> MapAccess<'de> for HashSeq<'de, 'a> {
@@ -546,13 +591,12 @@ impl<'de, 'a> MapAccess<'de> for HashSeq<'de, 'a> {
     where
         K: de::DeserializeSeed<'de>,
     {
-        if self.index >= self.len {
+        if *self.index >= self.len {
             return Ok(None);
         }
 
-        self.deserializer.remove_ivar_prefix = self.remove_ivar_prefix;
+        *self.index += 1;
 
-        self.index += 1;
         Ok(bubble_error!(
             seed.deserialize(&mut *self.deserializer).map(Some),
             Context::Key
@@ -563,8 +607,6 @@ impl<'de, 'a> MapAccess<'de> for HashSeq<'de, 'a> {
     where
         V: de::DeserializeSeed<'de>,
     {
-        self.deserializer.remove_ivar_prefix = false;
-
         Ok(bubble_error!(
             seed.deserialize(&mut *self.deserializer),
             Context::Key
@@ -572,6 +614,69 @@ impl<'de, 'a> MapAccess<'de> for HashSeq<'de, 'a> {
     }
 
     fn size_hint(&self) -> Option<usize> {
-        Some(self.len - self.index)
+        Some(self.len - *self.index)
+    }
+}
+
+struct ObjSeq<'de, 'a> {
+    deserializer: &'a mut Deserializer<'de>,
+    len: usize,
+    index: &'a mut usize,
+}
+
+struct ObjKeyDeserializer<'a, 'de>(&'a mut Deserializer<'de>);
+
+impl<'a, 'de> serde::Deserializer<'de> for ObjKeyDeserializer<'a, 'de> {
+    type Error = Error;
+
+    fn deserialize_any<V>(self, visitor: V) -> std::result::Result<V::Value, Self::Error>
+    where
+        V: VisitorExt<'de>,
+    {
+        // as we're deserializing an instance variable, we're going to get a string prefixed via a @.
+        let symbol: &str = Deserialize::deserialize(&mut *self.0)?;
+        // remove the @ prefix, and visit symbol.
+        visitor.visit_symbol(&symbol[1..])
+    }
+
+    forward_to_deserialize_any! {
+        bool i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 f32 f64 char str
+        string bytes byte_buf unit unit_struct newtype_struct seq tuple
+        option tuple_struct map struct enum identifier ignored_any
+    }
+}
+
+impl<'de, 'a> MapAccess<'de> for ObjSeq<'de, 'a> {
+    type Error = Error;
+
+    fn next_key_seed<K>(&mut self, seed: K) -> std::result::Result<Option<K::Value>, Self::Error>
+    where
+        K: de::DeserializeSeed<'de>,
+    {
+        if *self.index >= self.len {
+            return Ok(None);
+        }
+
+        *self.index += 1;
+
+        Ok(bubble_error!(
+            seed.deserialize(ObjKeyDeserializer(&mut *self.deserializer))
+                .map(Some),
+            Context::Key
+        ))
+    }
+
+    fn next_value_seed<V>(&mut self, seed: V) -> std::result::Result<V::Value, Self::Error>
+    where
+        V: de::DeserializeSeed<'de>,
+    {
+        Ok(bubble_error!(
+            seed.deserialize(&mut *self.deserializer),
+            Context::Key
+        ))
+    }
+
+    fn size_hint(&self) -> Option<usize> {
+        Some(self.len - *self.index)
     }
 }

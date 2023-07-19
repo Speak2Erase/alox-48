@@ -87,8 +87,15 @@ impl<'de> serde::Deserialize<'de> for Userdata {
         }
 
         impl<'de> crate::VisitorExt<'de> for UserdataVisitor {
-            fn visit_userdata(self, userdata: Userdata) -> Result<Self::Value, DeError> {
-                Ok(userdata)
+            fn visit_userdata(
+                self,
+                class: &'de str,
+                data: &'de [u8],
+            ) -> Result<Self::Value, DeError> {
+                Ok(Userdata {
+                    class: class.into(),
+                    data: data.to_vec(),
+                })
             }
         }
 

@@ -18,64 +18,72 @@
 use serde::de::{Error as _, Unexpected, Visitor};
 
 use super::VisitorExt;
-use crate::{DeError, Object, RbString, Symbol, Userdata};
+use crate::DeError;
 
 impl<'de, T> VisitorExt<'de> for T
 where
     T: Visitor<'de>,
 {
-    default fn visit_userdata(self, _userdata: Userdata) -> Result<Self::Value, DeError> {
+    default fn visit_userdata(
+        self,
+        _class: &'de str,
+        _data: &'de [u8],
+    ) -> Result<Self::Value, DeError> {
         Err(DeError::invalid_type(Unexpected::Other("userdata"), &self))
     }
 
-    default fn visit_object(self, object: Object) -> Result<Self::Value, DeError> {
-        let fields = serde::de::value::MapDeserializer::new(
-            object
-                .fields
-                .into_iter()
-                .map(|(k, v)| (crate::Value::from(k), v)),
-        );
+    default fn visit_object<A>(self, _class: &'de str, fields: A) -> Result<Self::Value, DeError>
+    where
+        A: serde::de::MapAccess<'de, Error = DeError>,
+    {
         self.visit_map(fields)
     }
 
-    default fn visit_symbol(self, sym: Symbol) -> Result<Self::Value, DeError> {
-        self.visit_string(sym.to_string())
+    default fn visit_symbol(self, sym: &'de str) -> Result<Self::Value, DeError> {
+        self.visit_borrowed_str::<DeError>(sym)
     }
 
     #[allow(unused_imports, unused_variables)]
-    default fn visit_ruby_string(self, string: RbString) -> Result<Self::Value, DeError> {
+    default fn visit_ruby_string<A>(
+        self,
+        data: &'de [u8],
+        mut fields: A,
+    ) -> Result<Self::Value, DeError>
+    where
+        A: serde::de::MapAccess<'de, Error = DeError>,
+    {
         use crate::Value;
 
         #[cfg(feature = "warn-encoding")]
-        if !string.is_empty() {
-            match string
-                .fields
-                .get("E")
-                .or_else(|| string.fields.get("encoding"))
-            {
-                Some(f) => match f {
-                    Value::Bool(b) if !*b => {
-                        eprintln!("warning: converting ascii ruby string to utf8");
+        if !data.is_empty() {
+            while let Some(key) = fields.next_key()? {
+                if matches!(key, "E" | "encoding") {
+                    match fields.next_value()? {
+                        Value::Bool(b) if !b => {
+                            eprintln!("warning: converting ascii ruby string to utf8")
+                        }
+                        Value::Bool(b) if b => (),
+                        Value::String(s) => {
+                            let encoding = s.to_string_lossy();
+                            eprintln!(
+                                "warning: converting non-utf8 ruby string to utf8: {encoding}"
+                            );
+                        }
+                        v => eprintln!("warning: unexpected encoding type on ruby string: {v:?}"),
                     }
-                    Value::Bool(b) if *b => {}
-                    Value::String(s) => {
-                        eprintln!(
-                            "warning: converting non-utf8 ruby string to utf8: {}",
-                            s.to_string_lossy()
-                        );
-                    }
-                    v => eprintln!("warning: unexpected encoding type on ruby string: {v:?}"),
-                },
-                None => eprintln!(
-                    "warning: converting ruby string with no encoding (likely binary data) to utf8"
-                ),
+                    break;
+                }
+                fields.next_value::<serde::de::IgnoredAny>()?;
             }
+            eprintln!(
+                "warning: converting ruby string with no encoding (likely binary data) to utf8"
+            );
         }
 
-        let str = string.to_string_lossy();
+        let str = String::from_utf8_lossy(data);
 
         match str {
-            std::borrow::Cow::Borrowed(str) => self.visit_str(str),
+            std::borrow::Cow::Borrowed(str) => self.visit_borrowed_str(str),
             std::borrow::Cow::Owned(str) => self.visit_string(str),
         }
     }
@@ -83,19 +91,25 @@ where
 
 /// Default implementation for [`VisitorExt`].
 impl<'de> VisitorExt<'de> for serde::de::IgnoredAny {
-    fn visit_userdata(self, _userdata: Userdata) -> Result<Self::Value, DeError> {
+    fn visit_userdata(self, _class: &'de str, _data: &'de [u8]) -> Result<Self::Value, DeError> {
         Ok(serde::de::IgnoredAny)
     }
 
-    fn visit_object(self, _object: Object) -> Result<Self::Value, DeError> {
+    fn visit_object<A>(self, class: &'de str, fields: A) -> Result<Self::Value, DeError>
+    where
+        A: serde::de::MapAccess<'de, Error = DeError>,
+    {
         Ok(serde::de::IgnoredAny)
     }
 
-    fn visit_symbol(self, _sym: Symbol) -> Result<Self::Value, DeError> {
+    fn visit_symbol(self, sym: &'de str) -> Result<Self::Value, DeError> {
         Ok(serde::de::IgnoredAny)
     }
 
-    fn visit_ruby_string(self, _str: RbString) -> Result<Self::Value, DeError> {
+    fn visit_ruby_string<A>(self, data: &'de [u8], fields: A) -> Result<Self::Value, DeError>
+    where
+        A: serde::de::MapAccess<'de, Error = DeError>,
+    {
         Ok(serde::de::IgnoredAny)
     }
 }

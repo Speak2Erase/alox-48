@@ -18,7 +18,7 @@
 use serde::Deserialize;
 
 use crate::de::VisitorExt;
-use crate::value::{Object, RbArray, RbHash, RbString, Symbol, Userdata};
+use crate::value::{Object, RbString, Userdata};
 use crate::DeError;
 
 use super::Value;
@@ -106,7 +106,7 @@ impl<'de> serde::Deserialize<'de> for Value {
                 A: serde::de::SeqAccess<'de>,
             {
                 let de = serde::de::value::SeqAccessDeserializer::new(seq);
-                let sequence = RbArray::deserialize(de)?;
+                let sequence = Deserialize::deserialize(de)?;
                 Ok(Value::Array(sequence))
             }
 
@@ -115,26 +115,53 @@ impl<'de> serde::Deserialize<'de> for Value {
                 A: serde::de::MapAccess<'de>,
             {
                 let de = serde::de::value::MapAccessDeserializer::new(map);
-                let mapping = RbHash::deserialize(de)?;
+                let mapping = Deserialize::deserialize(de)?;
                 Ok(Value::Hash(mapping))
             }
         }
 
         impl<'de> VisitorExt<'de> for ValueVisitor {
-            fn visit_object(self, object: Object) -> Result<Self::Value, DeError> {
-                Ok(Value::Object(object))
+            fn visit_object<A>(self, class: &'de str, fields: A) -> Result<Self::Value, DeError>
+            where
+                A: serde::de::MapAccess<'de, Error = DeError>,
+            {
+                let fields =
+                    Deserialize::deserialize(serde::de::value::MapAccessDeserializer::new(fields))?;
+                Ok(Value::Object(Object {
+                    class: class.into(),
+                    fields,
+                }))
             }
 
-            fn visit_userdata(self, userdata: Userdata) -> Result<Self::Value, DeError> {
-                Ok(Value::Userdata(userdata))
+            fn visit_userdata(
+                self,
+                class: &'de str,
+                data: &'de [u8],
+            ) -> Result<Self::Value, DeError> {
+                Ok(Value::Userdata(Userdata {
+                    class: class.into(),
+                    data: data.to_vec(),
+                }))
             }
 
-            fn visit_symbol(self, sym: Symbol) -> Result<Self::Value, DeError> {
-                Ok(Value::Symbol(sym))
+            fn visit_symbol(self, sym: &'de str) -> Result<Self::Value, DeError> {
+                Ok(Value::Symbol(sym.into()))
             }
 
-            fn visit_ruby_string(self, string: RbString) -> Result<Self::Value, DeError> {
-                Ok(Value::String(string))
+            fn visit_ruby_string<A>(
+                self,
+                data: &'de [u8],
+                fields: A,
+            ) -> Result<Self::Value, DeError>
+            where
+                A: serde::de::MapAccess<'de, Error = DeError>,
+            {
+                let fields =
+                    Deserialize::deserialize(serde::de::value::MapAccessDeserializer::new(fields))?;
+                Ok(Value::String(RbString {
+                    data: data.to_vec(),
+                    fields,
+                }))
             }
         }
 
@@ -142,7 +169,9 @@ impl<'de> serde::Deserialize<'de> for Value {
     }
 }
 
-impl<'de> serde::de::IntoDeserializer<'de, DeError> for Value {
+// This is a little hacky and I'm unsure how I feel about it.
+// It could be solved by making Value borrow from the deserializer data, although that feels iffy in itself.
+impl<'de> serde::de::IntoDeserializer<'de, DeError> for &'de Value {
     type Deserializer = Self;
 
     fn into_deserializer(self) -> Self::Deserializer {
@@ -150,7 +179,7 @@ impl<'de> serde::de::IntoDeserializer<'de, DeError> for Value {
     }
 }
 
-impl<'de> serde::Deserializer<'de> for Value {
+impl<'de> serde::Deserializer<'de> for &'de Value {
     type Error = DeError;
 
     fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
@@ -159,21 +188,27 @@ impl<'de> serde::Deserializer<'de> for Value {
     {
         match self {
             Value::Nil => visitor.visit_unit(),
-            Value::Bool(v) => visitor.visit_bool(v),
-            Value::Float(v) => visitor.visit_f64(v),
-            Value::Integer(v) => visitor.visit_i64(v),
-            Value::String(v) => visitor.visit_ruby_string(v),
-            Value::Symbol(v) => visitor.visit_symbol(v),
+            Value::Bool(v) => visitor.visit_bool(*v),
+            Value::Float(v) => visitor.visit_f64(*v),
+            Value::Integer(v) => visitor.visit_i64(*v),
+            Value::String(v) => {
+                let fields = serde::de::value::MapDeserializer::new(v.fields.iter());
+                visitor.visit_ruby_string(&v.data, fields)
+            }
+            Value::Symbol(v) => visitor.visit_symbol(v.as_str()),
             Value::Array(v) => {
-                let seq = serde::de::value::SeqDeserializer::new(v.into_iter());
+                let seq = serde::de::value::SeqDeserializer::new(v.iter());
                 visitor.visit_seq(seq)
             }
             Value::Hash(v) => {
-                let map = serde::de::value::MapDeserializer::new(v.into_iter());
+                let map = serde::de::value::MapDeserializer::new(v.iter());
                 visitor.visit_map(map)
             }
-            Value::Userdata(v) => visitor.visit_userdata(v),
-            Value::Object(v) => visitor.visit_object(v),
+            Value::Userdata(v) => visitor.visit_userdata(v.class.as_str(), &v.data),
+            Value::Object(v) => {
+                let fields = serde::de::value::MapDeserializer::new(v.fields.iter());
+                visitor.visit_object(v.class.as_str(), fields)
+            }
         }
     }
 

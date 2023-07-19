@@ -14,7 +14,7 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with alox-48.  If not, see <http://www.gnu.org/licenses/>.
-use crate::DeError;
+use crate::{DeError, VisitorExt};
 
 /// A symbol from ruby.
 /// It's a newtype around a String, meant to preserve types during (de)serialization.
@@ -83,12 +83,37 @@ impl<'de> serde::Deserialize<'de> for Symbol {
         }
 
         impl<'de> crate::VisitorExt<'de> for SymbolVisitor {
-            fn visit_symbol(self, sym: Symbol) -> Result<Self::Value, DeError> {
-                Ok(sym)
+            fn visit_symbol(self, sym: &'de str) -> Result<Self::Value, DeError> {
+                Ok(sym.into())
             }
         }
 
         deserializer.deserialize_any(SymbolVisitor)
+    }
+}
+
+impl<'de> serde::Deserializer<'de> for &'de Symbol {
+    type Error = DeError;
+
+    fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: VisitorExt<'de>,
+    {
+        visitor.visit_symbol(self.as_str())
+    }
+
+    serde::forward_to_deserialize_any! {
+        bool i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 f32 f64 char str
+        string bytes byte_buf unit unit_struct newtype_struct seq tuple
+        option tuple_struct map struct enum identifier ignored_any
+    }
+}
+
+impl<'de> serde::de::IntoDeserializer<'de, DeError> for &'de Symbol {
+    type Deserializer = Self;
+
+    fn into_deserializer(self) -> Self::Deserializer {
+        self
     }
 }
 

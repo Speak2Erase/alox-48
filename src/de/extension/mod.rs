@@ -15,7 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with alox-48.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::{DeError, Object, RbString, Symbol, Userdata};
+use crate::DeError;
 use serde::de::Visitor;
 
 mod impls;
@@ -37,34 +37,36 @@ pub trait VisitorExt<'de>: Visitor<'de> {
     ///
     /// # Errors
     /// Errors by default.
-    fn visit_userdata(self, userdata: Userdata) -> Result<Self::Value, DeError>;
+    fn visit_userdata(self, class: &'de str, data: &'de [u8]) -> Result<Self::Value, DeError>;
 
     /// For deserializing ruby objects in general.
     /// It's different to how deserializing structs normally works in serde, as you get a class name.
     ///
     /// Forwards to [`Visitor::visit_map`] by default.
     #[allow(clippy::missing_errors_doc)]
-    fn visit_object(self, object: Object) -> Result<Self::Value, DeError>;
+    fn visit_object<A>(self, class: &'de str, fields: A) -> Result<Self::Value, DeError>
+    where
+        A: serde::de::MapAccess<'de, Error = DeError>;
 
     /// For deserializing ruby symbols.
     /// Only exists to distinguish between strings and symbols.
     ///
     /// Forwards to [`Visitor::visit_borrowed_str`] by default.
     #[allow(clippy::missing_errors_doc)]
-    fn visit_symbol(self, sym: Symbol) -> Result<Self::Value, DeError>;
+    fn visit_symbol(self, sym: &'de str) -> Result<Self::Value, DeError>;
 
     /// For deserializing ruby strings which may or may not be utf8.
     /// You will also get any extra fields attached to the string, like the encoding (as that is a thing in ruby)
     ///
     /// By default, it uses [`String::from_utf8_lossy`] and matches the resulting [`std::borrow::Cow`] like this:
-    /// ```
+    /// ```no_run
     /// match str {
     ///     std::borrow::Cow::Borrowed(str) => self.visit_borrowed_str(str),
     ///     std::borrow::Cow::Owned(str) => self.visit_string(str),
     /// }
     /// ```
-    ///
-    /// YOU MUST DESERIALIZE FIELDS. Not deserializing fields will lead to the deserializer being out of sync!
     #[allow(clippy::missing_errors_doc)]
-    fn visit_ruby_string(self, string: RbString) -> Result<Self::Value, DeError>;
+    fn visit_ruby_string<A>(self, data: &'de [u8], fields: A) -> Result<Self::Value, DeError>
+    where
+        A: serde::de::MapAccess<'de, Error = DeError>;
 }

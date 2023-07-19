@@ -111,8 +111,21 @@ impl<'de> serde::Deserialize<'de> for RbString {
         }
 
         impl<'de> crate::VisitorExt<'de> for StringVisitor {
-            fn visit_ruby_string(self, string: RbString) -> Result<Self::Value, DeError> {
-                Ok(string)
+            fn visit_ruby_string<A>(
+                self,
+                data: &'de [u8],
+                fields: A,
+            ) -> Result<Self::Value, DeError>
+            where
+                A: serde::de::MapAccess<'de, Error = DeError>,
+            {
+                let fields = serde::Deserialize::deserialize(
+                    serde::de::value::MapAccessDeserializer::new(fields),
+                )?;
+                Ok(RbString {
+                    data: data.to_vec(),
+                    fields,
+                })
             }
         }
 
