@@ -19,7 +19,7 @@
 use indexmap::IndexSet;
 use serde::ser;
 
-use super::{Error, Kind, Result};
+use super::{bubble_error, Context, Error, Kind, Result};
 use crate::Symbol;
 
 /// The `alox_48` serializer.

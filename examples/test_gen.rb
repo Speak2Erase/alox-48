@@ -5,4 +5,12 @@ def dump_to_hex(obj)
   puts "&[#{e}];"
 end
 
-dump_to_hex([:test, :test, :test, :test, :test])
+class BadData
+  def initialize
+    @good = ["hfjvhjvjhvhjvl"]
+    @bad = { "oops": "something went wrong" }
+    @after_bad = "im a string! nothing can go wrong here :)"
+  end
+end
+
+dump_to_hex([BadData.new])

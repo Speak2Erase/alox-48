@@ -15,7 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Luminol.  If not, see <http://www.gnu.org/licenses/>.
 use super::{Object, RbFields, RbHash, RbString, Symbol, Userdata, Value};
-use crate::ser::{Context, Error, Kind, Result, SerializeExt};
+use crate::ser::{bubble_error, Context, Error, Kind, Result, SerializeExt};
 
 #[allow(clippy::panic_in_result_fn)]
 impl serde::Serialize for Value {
@@ -284,6 +284,7 @@ impl SerializeExt for Serializer {
     }
 }
 
+#[allow(missing_debug_implementations)]
 pub struct SerializeVec {
     values: Vec<Value>,
 }
@@ -322,6 +323,7 @@ impl serde::ser::SerializeTuple for SerializeVec {
     }
 }
 
+#[allow(missing_debug_implementations)]
 pub struct SerializeMap {
     values: RbHash,
     key: Option<Value>,
@@ -355,6 +357,7 @@ impl serde::ser::SerializeMap for SerializeMap {
     }
 }
 
+#[allow(missing_debug_implementations)]
 pub struct SerializeObject {
     class: Symbol,
     fields: RbFields,
