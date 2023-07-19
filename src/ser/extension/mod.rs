@@ -41,6 +41,7 @@ pub trait SerializeExt: serde::Serializer {
     /// Serialize a ruby string, with extra fields.
     ///
     /// This is mainly used for serializing [`crate::RbString`].
+    // FIXME: don't pass raw string around? then again this is meant for use with this crate only..
     fn serialize_ruby_string(self, string: &RbString) -> Result<Self::Ok, Self::Error>;
 
     /// Serialize an object.

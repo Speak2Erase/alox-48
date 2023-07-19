@@ -14,7 +14,7 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with alox-48.  If not, see <http://www.gnu.org/licenses/>.
-#![allow(unused_variables, clippy::cast_possible_wrap)]
+#![allow(clippy::cast_possible_wrap)]
 
 use indexmap::IndexSet;
 use serde::ser;
@@ -142,15 +142,15 @@ impl<'a> ser::Serializer for &'a mut Serializer {
 
     type SerializeTuple = Self;
 
-    type SerializeTupleStruct = Self;
+    type SerializeTupleStruct = serde::ser::Impossible<Self::Ok, Self::Error>;
 
-    type SerializeTupleVariant = Self;
+    type SerializeTupleVariant = serde::ser::Impossible<Self::Ok, Self::Error>;
 
     type SerializeMap = Self;
 
     type SerializeStruct = Self;
 
-    type SerializeStructVariant = Self;
+    type SerializeStructVariant = serde::ser::Impossible<Self::Ok, Self::Error>;
 
     fn serialize_bool(self, v: bool) -> Result<Self::Ok> {
         self.append(if v { b'T' } else { b'F' });
@@ -233,7 +233,7 @@ impl<'a> ser::Serializer for &'a mut Serializer {
         Ok(())
     }
 
-    fn serialize_unit_struct(self, name: &'static str) -> Result<Self::Ok> {
+    fn serialize_unit_struct(self, _name: &'static str) -> Result<Self::Ok> {
         eprintln!("warning: unit structs do not map well to ruby. serializing as nil");
 
         self.serialize_unit()
@@ -241,9 +241,9 @@ impl<'a> ser::Serializer for &'a mut Serializer {
 
     fn serialize_unit_variant(
         self,
-        name: &'static str,
-        variant_index: u32,
-        variant: &'static str,
+        _name: &'static str,
+        _variant_index: u32,
+        _variant: &'static str,
     ) -> Result<Self::Ok> {
         Err(Error {
             kind: Kind::Unsupported("enums"),
@@ -251,7 +251,11 @@ impl<'a> ser::Serializer for &'a mut Serializer {
         })
     }
 
-    fn serialize_newtype_struct<T: ?Sized>(self, name: &'static str, value: &T) -> Result<Self::Ok>
+    fn serialize_newtype_struct<T: ?Sized>(
+        self,
+        _name: &'static str,
+        _value: &T,
+    ) -> Result<Self::Ok>
     where
         T: serde::Serialize,
     {
@@ -263,10 +267,10 @@ impl<'a> ser::Serializer for &'a mut Serializer {
 
     fn serialize_newtype_variant<T: ?Sized>(
         self,
-        name: &'static str,
-        variant_index: u32,
-        variant: &'static str,
-        value: &T,
+        _name: &'static str,
+        _variant_index: u32,
+        _variant: &'static str,
+        _value: &T,
     ) -> Result<Self::Ok>
     where
         T: serde::Serialize,
@@ -300,8 +304,8 @@ impl<'a> ser::Serializer for &'a mut Serializer {
 
     fn serialize_tuple_struct(
         self,
-        name: &'static str,
-        len: usize,
+        _name: &'static str,
+        _len: usize,
     ) -> Result<Self::SerializeTupleStruct> {
         Err(Error {
             kind: Kind::Unsupported("tuple struct"),
@@ -311,10 +315,10 @@ impl<'a> ser::Serializer for &'a mut Serializer {
 
     fn serialize_tuple_variant(
         self,
-        name: &'static str,
-        variant_index: u32,
-        variant: &'static str,
-        len: usize,
+        _name: &'static str,
+        _variant_index: u32,
+        _variant: &'static str,
+        _len: usize,
     ) -> Result<Self::SerializeTupleVariant> {
         Err(Error {
             kind: Kind::Unsupported("enums"),
@@ -347,10 +351,10 @@ impl<'a> ser::Serializer for &'a mut Serializer {
 
     fn serialize_struct_variant(
         self,
-        name: &'static str,
-        variant_index: u32,
-        variant: &'static str,
-        len: usize,
+        _name: &'static str,
+        _variant_index: u32,
+        _variant: &'static str,
+        _len: usize,
     ) -> Result<Self::SerializeStructVariant> {
         Err(Error {
             kind: Kind::Unsupported("enums"),
@@ -420,29 +424,6 @@ impl<'a> ser::SerializeStruct for &'a mut Serializer {
     }
 }
 
-impl<'a> ser::SerializeStructVariant for &'a mut Serializer {
-    type Ok = ();
-
-    type Error = Error;
-
-    fn serialize_field<T: ?Sized>(&mut self, key: &'static str, value: &T) -> Result<()>
-    where
-        T: serde::Serialize,
-    {
-        Err(Error {
-            kind: Kind::Unsupported("enums"),
-            context: vec![],
-        })
-    }
-
-    fn end(self) -> Result<Self::Ok> {
-        Err(Error {
-            kind: Kind::Unsupported("enums"),
-            context: vec![],
-        })
-    }
-}
-
 impl<'a> ser::SerializeTuple for &'a mut Serializer {
     type Ok = ();
 
@@ -457,52 +438,6 @@ impl<'a> ser::SerializeTuple for &'a mut Serializer {
 
     fn end(self) -> Result<Self::Ok> {
         Ok(())
-    }
-}
-
-impl<'a> ser::SerializeTupleStruct for &'a mut Serializer {
-    type Ok = ();
-
-    type Error = Error;
-
-    fn serialize_field<T: ?Sized>(&mut self, value: &T) -> Result<()>
-    where
-        T: serde::Serialize,
-    {
-        Err(Error {
-            kind: Kind::Unsupported("tuple struct"),
-            context: vec![],
-        })
-    }
-
-    fn end(self) -> Result<Self::Ok> {
-        Err(Error {
-            kind: Kind::Unsupported("tuple struct"),
-            context: vec![],
-        })
-    }
-}
-
-impl<'a> ser::SerializeTupleVariant for &'a mut Serializer {
-    type Ok = ();
-
-    type Error = Error;
-
-    fn serialize_field<T: ?Sized>(&mut self, value: &T) -> Result<()>
-    where
-        T: serde::Serialize,
-    {
-        Err(Error {
-            kind: Kind::Unsupported("enums"),
-            context: vec![],
-        })
-    }
-
-    fn end(self) -> Result<Self::Ok> {
-        Err(Error {
-            kind: Kind::Unsupported("enums"),
-            context: vec![],
-        })
     }
 }
 

@@ -62,6 +62,14 @@ pub struct Userdata {
     pub data: Vec<u8>,
 }
 
+impl Userdata {
+    /// Splits this userdata into its constituants.
+    #[allow(clippy::must_use_candidate)]
+    pub fn into_parts(self) -> (Symbol, Vec<u8>) {
+        (self.class, self.data)
+    }
+}
+
 impl serde::Serialize for Userdata {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where

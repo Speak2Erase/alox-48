@@ -51,16 +51,24 @@ impl RbString {
         String::from_utf8(self.data)
     }
 
+    /// Get the length of the string data.
     pub fn len(&self) -> usize {
         self.data.len()
     }
 
+    /// Returns true if the string data is empty.
     pub fn is_empty(&self) -> bool {
         self.data.is_empty()
     }
 
+    /// Returns the string data as a slice.
     pub fn as_slice(&self) -> &[u8] {
         &self.data
+    }
+
+    /// Splits this string into its constituants.
+    pub fn into_parts(self) -> (Vec<u8>, RbFields) {
+        (self.data, self.fields)
     }
 }
 

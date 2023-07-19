@@ -26,6 +26,14 @@ pub struct Object {
     pub fields: RbFields,
 }
 
+impl Object {
+    /// Splits this object into its constituants.
+    #[allow(clippy::must_use_candidate)]
+    pub fn into_parts(self) -> (Symbol, RbFields) {
+        (self.class, self.fields)
+    }
+}
+
 impl serde::Serialize for Object {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
