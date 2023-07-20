@@ -140,6 +140,8 @@ pub enum Context {
     Integer,
     #[error("While deserializing a float")]
     Float,
+    #[error("While reading {0} bytes")]
+    ReadingBytes(usize),
 }
 
 #[allow(unused_macros)]

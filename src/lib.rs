@@ -8,6 +8,7 @@
     clippy::panicking_unwrap,
     clippy::all
 )]
+#![forbid(unsafe_code)]
 #![feature(min_specialization)]
 
 //! alox-48

@@ -35,28 +35,120 @@ use crate::tag::Tag;
 /// The alox-48 deserializer.
 #[derive(Debug, Clone)]
 pub struct Deserializer<'de> {
-    input: &'de [u8],
-    objtable: Vec<&'de [u8]>,
+    cursor: Cursor<'de>,
+
+    objtable: Vec<usize>,
+    stack: Vec<usize>,
+    blacklisted_objects: BTreeSet<usize>,
+
     sym_table: Vec<&'de str>,
-    stack: Vec<&'de [u8]>,
-    blacklisted_objects: BTreeSet<&'de [u8]>,
 }
 
-macro_rules! deserialize_len {
-    ($this:expr, $($context:expr),+ $(,)?) => {{
-        let raw_length = bubble_error!($this.read_packed_int(), $( $context, )+);
-        raw_length.try_into().map_err(|_| Error {
-            kind: Kind::UnexpectedNegativeLength(raw_length),
-            context: vec![$( $context, )+],
-            span: span!(self)
-        })?
-    }};
+#[derive(Debug, Clone)]
+struct Cursor<'de> {
+    input: &'de [u8],
+    position: usize,
 }
 
 macro_rules! span {
     ($this:expr) => {
-        (0..0).into() // TODO
+        ($this.cursor.position..$this.cursor.position + 1).into()
     };
+    ($this:expr, $len:expr) => {
+        ($this.cursor.position..$this.cursor.position + $len).into()
+    };
+}
+
+macro_rules! span_cursor {
+    ($this:expr) => {
+        ($this.position..$this.position + 1).into()
+    };
+    ($this:expr, $len:expr) => {
+        ($this.position..$this.position + $len).into()
+    };
+}
+
+macro_rules! error {
+    ($input:expr) => {{
+        let config = pretty_hex::HexConfig {
+            title: true,
+            ascii: true,
+            width: 16,
+            group: 4,
+            chunk: 1,
+            max_bytes: usize::MAX,
+        };
+        let source = pretty_hex::config_hex($input, config);
+        Error {}
+    }};
+}
+
+impl<'de> Cursor<'de> {
+    fn new(input: &'de [u8]) -> Self {
+        Self { input, position: 0 }
+    }
+
+    fn seek(&mut self, position: usize) {
+        self.position = position;
+    }
+
+    fn peek_byte(&self) -> Result<u8> {
+        self.input.get(self.position).copied().ok_or(Error {
+            kind: Kind::Eof,
+            context: vec![],
+            span: span_cursor!(self),
+        })
+    }
+
+    fn next_byte(&mut self) -> Result<u8> {
+        let byte = self.peek_byte()?;
+        self.position += 1;
+        Ok(byte)
+    }
+
+    fn peek_tag(&self) -> Result<Tag> {
+        let byte = bubble_error!(self.peek_byte(), Context::FindingTag);
+        Tag::from_u8(byte).ok_or(Error {
+            kind: Kind::WrongTag(byte),
+            context: vec![Context::FindingTag],
+            span: span_cursor!(self),
+        })
+    }
+
+    fn next_tag(&mut self) -> Result<Tag> {
+        let byte = bubble_error!(self.next_byte(), Context::FindingTag);
+        Tag::from_u8(byte).ok_or(Error {
+            kind: Kind::WrongTag(byte),
+            context: vec![Context::FindingTag],
+            span: span_cursor!(self),
+        })
+    }
+
+    fn next_bytes_dyn(&mut self, length: usize) -> Result<&'de [u8]> {
+        if length > self.input.len() {
+            return Err(Error {
+                kind: Kind::Eof,
+                context: vec![Context::ReadingBytes(length)],
+                span: span_cursor!(self, length.min(self.input.len())),
+            });
+        }
+
+        let ret = &self.input[self.position..self.position + length];
+        self.position += length;
+        Ok(ret)
+    }
+}
+
+macro_rules! deserialize_len {
+    ($this:expr, $($context:expr),+ $(,)?) => {{
+        let start_position = $this.cursor.position;
+        let raw_length = bubble_error!($this.read_packed_int(), $( $context, )+);
+        raw_length.try_into().map_err(|_| Error {
+            kind: Kind::UnexpectedNegativeLength(raw_length),
+            context: vec![$( $context, )+],
+            span: (start_position..$this.cursor.position).into(),
+        })?
+    }};
 }
 
 impl<'de> Deserializer<'de> {
@@ -88,7 +180,7 @@ impl<'de> Deserializer<'de> {
         }
 
         Ok(Self {
-            input,
+            cursor: Cursor::new(input),
             objtable: vec![],
             sym_table: vec![],
             stack: vec![],
@@ -96,58 +188,12 @@ impl<'de> Deserializer<'de> {
         })
     }
 
-    fn peek_byte(&self) -> Result<u8> {
-        self.input.first().copied().ok_or(Error {
-            kind: Kind::Eof,
-            context: vec![],
-            span: span!(self),
-        })
-    }
-
-    fn next_byte(&mut self) -> Result<u8> {
-        let byte = self.peek_byte()?;
-        self.input = &self.input[1..];
-        Ok(byte)
-    }
-
-    fn peek_tag(&self) -> Result<Tag> {
-        let byte = bubble_error!(self.peek_byte(), Context::FindingTag);
-        Tag::from_u8(byte).ok_or(Error {
-            kind: Kind::WrongTag(byte),
-            context: vec![Context::FindingTag],
-            span: span!(self),
-        })
-    }
-
-    fn next_tag(&mut self) -> Result<Tag> {
-        let byte = bubble_error!(self.next_byte(), Context::FindingTag);
-        Tag::from_u8(byte).ok_or(Error {
-            kind: Kind::WrongTag(byte),
-            context: vec![Context::FindingTag],
-            span: span!(self),
-        })
-    }
-
-    fn next_bytes_dyn(&mut self, length: usize) -> Result<&'de [u8]> {
-        if length > self.input.len() {
-            return Err(Error {
-                kind: Kind::Eof,
-                context: vec![],
-                span: span!(self),
-            });
-        }
-
-        let (ret, remaining) = self.input.split_at(length);
-        self.input = remaining;
-        Ok(ret)
-    }
-
     fn read_packed_int(&mut self) -> Result<i32> {
         // The bounds of a Ruby Marshal packed integer are [-(2**30), 2**30 - 1], anything beyond that
         // gets serialized as a bignum.
         //
         // The bounds of an i32 are [-(2**31), 2**31 - 1], so we should be safe.
-        let c = bubble_error!(self.next_byte(), Context::Integer) as i8;
+        let c = bubble_error!(self.cursor.next_byte(), Context::Integer) as i8;
 
         Ok(match c {
             0 => 0,
@@ -157,7 +203,7 @@ impl<'de> Deserializer<'de> {
                 let mut x = 0;
 
                 for i in 0..c {
-                    let n = bubble_error!(self.next_byte(), Context::Integer) as i32;
+                    let n = bubble_error!(self.cursor.next_byte(), Context::Integer) as i32;
                     let n = n << (8 * i);
                     x |= n;
                 }
@@ -169,7 +215,7 @@ impl<'de> Deserializer<'de> {
 
                 for i in 0..-c {
                     let a = !(0xFF << (8 * i)); // wtf is this magic
-                    let b = bubble_error!(self.next_byte(), Context::Integer) as i32;
+                    let b = bubble_error!(self.cursor.next_byte(), Context::Integer) as i32;
                     let b = b << (8 * i);
 
                     x = (x & a) | b;
@@ -183,7 +229,7 @@ impl<'de> Deserializer<'de> {
     #[allow(clippy::panic_in_result_fn)]
     fn read_float(&mut self) -> Result<f64> {
         let length = deserialize_len!(self, Context::Float);
-        let out = bubble_error!(self.next_bytes_dyn(length), Context::Float);
+        let out = bubble_error!(self.cursor.next_bytes_dyn(length), Context::Float);
 
         if let Some(terminator_idx) = out.iter().position(|v| *v == 0) {
             let (str, [0, mantissa @ ..]) = out.split_at(terminator_idx) else {
@@ -221,7 +267,7 @@ impl<'de> Deserializer<'de> {
 
     fn read_symbol(&mut self) -> Result<&'de str> {
         let length = deserialize_len!(self, Context::Symbol);
-        let out = self.next_bytes_dyn(length)?;
+        let out = self.cursor.next_bytes_dyn(length)?;
 
         let str = match std::str::from_utf8(out) {
             Ok(a) => a,
@@ -252,7 +298,7 @@ impl<'de> Deserializer<'de> {
 
     // FIXME: FIND BETTER NAME
     fn read_symbol_either(&mut self) -> Result<&'de str> {
-        match self.next_tag()? {
+        match self.cursor.next_tag()? {
             Tag::Symbol => self.read_symbol(),
             Tag::Symlink => self.read_symlink(),
             t => Err(Error {
@@ -263,16 +309,16 @@ impl<'de> Deserializer<'de> {
         }
     }
 
-    fn is_blacklisted(&mut self, slice: &'de [u8]) -> bool {
-        self.blacklisted_objects.contains(slice)
+    fn is_blacklisted(&mut self, position: usize) -> bool {
+        self.blacklisted_objects.contains(&position)
     }
 
     fn register_obj(&mut self) {
         // Only push into the object table if we are reading new input
-        if !self.stack.is_empty() || self.is_blacklisted(self.input) {
+        if !self.stack.is_empty() || self.is_blacklisted(self.cursor.position) {
             return;
         }
-        self.objtable.push(self.input);
+        self.objtable.push(self.cursor.position);
     }
 }
 
@@ -287,7 +333,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
         V: VisitorExt<'de>,
     {
         if !matches!(
-            bubble_error!(self.peek_tag(), Context::FindingTag),
+            bubble_error!(self.cursor.peek_tag(), Context::FindingTag),
             Tag::Nil
                 | Tag::True
                 | Tag::False
@@ -299,7 +345,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
             self.register_obj();
         }
 
-        match bubble_error!(self.next_tag(), Context::FindingTag) {
+        match bubble_error!(self.cursor.next_tag(), Context::FindingTag) {
             Tag::Nil => visitor.visit_unit(),
             Tag::True => visitor.visit_bool(true),
             Tag::False => visitor.visit_bool(false),
@@ -307,7 +353,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
             Tag::Float => visitor.visit_f64(self.read_float()?),
             Tag::String => {
                 let len = deserialize_len!(self, Context::StringText);
-                let data = bubble_error!(self.next_bytes_dyn(len), Context::StringText);
+                let data = bubble_error!(self.cursor.next_bytes_dyn(len), Context::StringText);
 
                 let mut index = 0;
                 let result = visitor.visit_ruby_string(
@@ -365,11 +411,11 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
             // Honestly, I have no idea why this is a thing...
             // Instance is extremely unclear and I've never seen Marshal data with it prefixing anything but a string.
             Tag::Instance => {
-                match bubble_error!(self.next_tag(), Context::Instance) {
+                match bubble_error!(self.cursor.next_tag(), Context::Instance) {
                     Tag::String => {
                         let len = deserialize_len!(self, Context::Instance, Context::StringText);
                         let data = bubble_error!(
-                            self.next_bytes_dyn(len),
+                            self.cursor.next_bytes_dyn(len),
                             Context::Instance,
                             Context::StringText
                         );
@@ -441,12 +487,13 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
                     span: span!(self),
                 })?;
 
-                self.stack.push(self.input);
-                self.input = jump_target;
+                self.stack.push(self.cursor.position);
+                self.cursor.seek(jump_target);
 
                 let result = self.deserialize_any(visitor);
 
-                self.input = self.stack.pop().expect("stack empty");
+                self.cursor
+                    .seek(self.stack.pop().expect("stack should not empty"));
 
                 result
             }
@@ -454,7 +501,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
                 let class = bubble_error!(self.read_symbol_either(), Context::ClassName);
                 let len = deserialize_len!(self, Context::UserdataLen);
 
-                let data = self.next_bytes_dyn(len)?;
+                let data = self.cursor.next_bytes_dyn(len)?;
 
                 visitor.visit_userdata(class, data)
             }
@@ -528,9 +575,9 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     where
         V: de::Visitor<'de>,
     {
-        match self.peek_tag()? {
+        match self.cursor.peek_tag()? {
             Tag::Nil => {
-                self.next_byte()?;
+                self.cursor.next_byte()?;
 
                 visitor.visit_none()
             }
