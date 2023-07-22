@@ -29,7 +29,7 @@ use serde::forward_to_deserialize_any;
 use serde::Deserialize;
 
 use super::VisitorExt;
-use super::{bubble_error, Context, Error, Kind, Result};
+use super::{bubble_error, Context, Error, Kind, Result, Source};
 use crate::tag::Tag;
 
 /// The alox-48 deserializer.
@@ -50,36 +50,14 @@ struct Cursor<'de> {
     position: usize,
 }
 
-macro_rules! span {
-    ($this:expr) => {
-        ($this.cursor.position..$this.cursor.position + 1).into()
-    };
-    ($this:expr, $len:expr) => {
-        ($this.cursor.position..$this.cursor.position + $len).into()
-    };
-}
-
-macro_rules! span_cursor {
-    ($this:expr) => {
-        ($this.position..$this.position + 1).into()
-    };
-    ($this:expr, $len:expr) => {
-        ($this.position..$this.position + $len).into()
-    };
-}
-
 macro_rules! error {
-    ($input:expr) => {{
-        let config = pretty_hex::HexConfig {
-            title: true,
-            ascii: true,
-            width: 16,
-            group: 4,
-            chunk: 1,
-            max_bytes: usize::MAX,
-        };
-        let source = pretty_hex::config_hex($input, config);
-        Error {}
+    ($cursor:expr, kind: $kind:expr, context: $context:expr, start: $start:expr, end: $end:expr) => {{
+        Error {
+            kind: $kind,
+            context: $context,
+            source: Source::new($cursor.input),
+            span: ($start..$end).into(),
+        }
     }};
 }
 
@@ -93,10 +71,12 @@ impl<'de> Cursor<'de> {
     }
 
     fn peek_byte(&self) -> Result<u8> {
-        self.input.get(self.position).copied().ok_or(Error {
-            kind: Kind::Eof,
-            context: vec![],
-            span: span_cursor!(self),
+        self.input.get(self.position).copied().ok_or(error! {
+                self,
+                kind: Kind::Eof,
+                context: vec![],
+                start: self.position,
+                end: self.position
         })
     }
 
@@ -108,28 +88,34 @@ impl<'de> Cursor<'de> {
 
     fn peek_tag(&self) -> Result<Tag> {
         let byte = bubble_error!(self.peek_byte(), Context::FindingTag);
-        Tag::from_u8(byte).ok_or(Error {
-            kind: Kind::WrongTag(byte),
-            context: vec![Context::FindingTag],
-            span: span_cursor!(self),
+        Tag::from_u8(byte).ok_or(error! {
+                self,
+                kind: Kind::WrongTag(byte),
+                context: vec![],
+                start: self.position,
+                end: self.position
         })
     }
 
     fn next_tag(&mut self) -> Result<Tag> {
         let byte = bubble_error!(self.next_byte(), Context::FindingTag);
-        Tag::from_u8(byte).ok_or(Error {
-            kind: Kind::WrongTag(byte),
-            context: vec![Context::FindingTag],
-            span: span_cursor!(self),
+        Tag::from_u8(byte).ok_or(error! {
+                self,
+                kind: Kind::WrongTag(byte),
+                context: vec![],
+                start: self.position,
+                end: self.position
         })
     }
 
     fn next_bytes_dyn(&mut self, length: usize) -> Result<&'de [u8]> {
         if length > self.input.len() {
-            return Err(Error {
-                kind: Kind::Eof,
-                context: vec![Context::ReadingBytes(length)],
-                span: span_cursor!(self, length.min(self.input.len())),
+            return Err(error! {
+                    self,
+                    kind: Kind::Eof,
+                    context: vec![Context::ReadingBytes(length)],
+                    start: self.position,
+                    end: self.input.len()
             });
         }
 
@@ -143,10 +129,12 @@ macro_rules! deserialize_len {
     ($this:expr, $($context:expr),+ $(,)?) => {{
         let start_position = $this.cursor.position;
         let raw_length = bubble_error!($this.read_packed_int(), $( $context, )+);
-        raw_length.try_into().map_err(|_| Error {
+        raw_length.try_into().map_err(|_| error! {
+            $this.cursor,
             kind: Kind::UnexpectedNegativeLength(raw_length),
             context: vec![$( $context, )+],
-            span: (start_position..$this.cursor.position).into(),
+            start: start_position,
+            end: $this.cursor.position
         })?
     }};
 }
@@ -162,25 +150,31 @@ impl<'de> Deserializer<'de> {
     // this function should never panic in practice as we perform bounds checking.
     #[allow(clippy::missing_panics_doc)]
     pub fn new(input: &'de [u8]) -> Result<Self> {
+        let mut cursor = Cursor::new(input);
         if input.len() < 2 {
-            return Err(Error {
-                kind: Kind::Eof,
-                context: vec![Context::ParsingVersion],
-                span: (0..input.len()).into(),
+            return Err(error! {
+                    cursor,
+                    kind: Kind::Eof,
+                    context: vec![Context::ParsingVersion],
+                    start: 0,
+                    end: input.len()
             });
         }
 
-        let (ver, input) = input.split_at(2);
-        if ver != [4, 8] {
-            return Err(Error {
-                kind: Kind::VersionError(ver.try_into().unwrap()),
-                context: vec![Context::ParsingVersion],
-                span: (0..2).into(),
+        let v1 = cursor.next_byte()?;
+        let v2 = cursor.next_byte()?;
+        if [v1, v2] != [4, 8] {
+            return Err(error! {
+                    cursor,
+                    kind: Kind::VersionError([v1, v2]),
+                    context: vec![Context::ParsingVersion],
+                    start: 0,
+                    end: 2
             });
         }
 
         Ok(Self {
-            cursor: Cursor::new(input),
+            cursor,
             objtable: vec![],
             sym_table: vec![],
             stack: vec![],
@@ -235,17 +229,23 @@ impl<'de> Deserializer<'de> {
             let (str, [0, mantissa @ ..]) = out.split_at(terminator_idx) else {
                 unreachable!();
             };
-            let float = str::parse::<f64>(&String::from_utf8_lossy(str)).map_err(|err| Error {
-                kind: Kind::Message(err.to_string()),
-                context: vec![Context::Float],
-                span: span!(self),
+            let float = str::parse::<f64>(&String::from_utf8_lossy(str)).map_err(|err| {
+                error! {
+                    self.cursor,
+                    kind: Kind::Message(err.to_string()),
+                    context: vec![Context::Float],
+                    start: self.cursor.position - length,
+                    end: terminator_idx
+                }
             })?;
             let transmuted = u64::from_ne_bytes(float.to_ne_bytes());
             if mantissa.len() > 4 {
-                return Err(Error {
+                return Err(error! {
+                    self.cursor,
                     kind: Kind::ParseFloatMantissaTooLong,
                     context: vec![Context::Float],
-                    span: span!(self),
+                    start: self.cursor.position - length,
+                    end: terminator_idx
                 });
             }
             let (mantissa, mask) = mantissa.iter().fold((0u64, 0u64), |(acc, mask), v| {
@@ -256,10 +256,14 @@ impl<'de> Deserializer<'de> {
             Ok(f64::from_ne_bytes(transmuted.to_ne_bytes()))
         } else {
             Ok(
-                str::parse::<f64>(&String::from_utf8_lossy(out)).map_err(|err| Error {
-                    kind: Kind::Message(err.to_string()),
-                    context: vec![Context::Float],
-                    span: span!(self),
+                str::parse::<f64>(&String::from_utf8_lossy(out)).map_err(|err| {
+                    error! {
+                        self.cursor,
+                        kind: Kind::Message(err.to_string()),
+                        context: vec![Context::Float],
+                        start: self.cursor.position - length,
+                        end: self.cursor.position
+                    }
                 })?,
             )
         }
@@ -272,10 +276,12 @@ impl<'de> Deserializer<'de> {
         let str = match std::str::from_utf8(out) {
             Ok(a) => a,
             Err(err) => {
-                return Err(Error {
+                return Err(error! {
+                    self.cursor,
                     kind: Kind::SymbolInvalidUTF8(err),
                     context: vec![Context::Symbol],
-                    span: span!(self),
+                    start: self.cursor.position - length,
+                    end: self.cursor.position
                 });
             }
         };
@@ -287,12 +293,15 @@ impl<'de> Deserializer<'de> {
     }
 
     fn read_symlink(&mut self) -> Result<&'de str> {
+        let start_position = self.cursor.position;
         let index = self.read_packed_int()? as usize;
 
-        self.sym_table.get(index).copied().ok_or(Error {
+        self.sym_table.get(index).copied().ok_or(error! {
+            self.cursor,
             kind: Kind::UnresolvedSymlink(index),
             context: vec![Context::Symbol],
-            span: span!(self),
+            start: start_position,
+            end: self.cursor.position
         })
     }
 
@@ -301,10 +310,12 @@ impl<'de> Deserializer<'de> {
         match self.cursor.next_tag()? {
             Tag::Symbol => self.read_symbol(),
             Tag::Symlink => self.read_symlink(),
-            t => Err(Error {
+            t => Err(error! {
+                self.cursor,
                 kind: Kind::ExpectedSymbol(t),
                 context: vec![Context::Symbol],
-                span: span!(self),
+                start: self.cursor.position,
+                end: self.cursor.position
             }),
         }
     }
@@ -445,10 +456,12 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
                     }
                     // This should work. Definitely.
                     // :ferrisclueless:
-                    _ => Err(Error {
+                    _ => Err(error! {
+                        self.cursor,
                         kind: Kind::Unsupported("Instance with raw IVARs"),
                         context: vec![Context::Instance, Context::FindingTag],
-                        span: span!(self),
+                        start: self.cursor.position,
+                        end: self.cursor.position
                     }),
                 }
             }
@@ -479,12 +492,15 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
                 Ok(result)
             }
             Tag::ObjectLink => {
+                let start_index = self.cursor.position;
                 let index = self.read_packed_int()? as _;
 
-                let jump_target = self.objtable.get(index).copied().ok_or(Error {
+                let jump_target = self.objtable.get(index).copied().ok_or(error! {
+                    self.cursor,
                     kind: Kind::UnresolvedObjectlink(index),
                     context: vec![Context::Objectlink(index)],
-                    span: span!(self),
+                    start: start_index,
+                    end: self.cursor.position
                 })?;
 
                 self.stack.push(self.cursor.position);
@@ -533,40 +549,54 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
 
                 result
             }
-            Tag::UserClass => Err(Error {
+            Tag::UserClass => Err(error! {
+                self.cursor,
                 kind: Kind::Unsupported("User class (class inheriting from a default ruby class)"),
                 context: vec![Context::FindingTag],
-                span: span!(self),
+                start: self.cursor.position,
+                end: self.cursor.position
             }), // FIXME: make this forward to newtype
-            Tag::RawRegexp => Err(Error {
+            Tag::RawRegexp => Err(error! {
+                self.cursor,
                 kind: Kind::Unsupported("Regex"),
                 context: vec![Context::FindingTag],
-                span: span!(self),
+                start: self.cursor.position,
+                end: self.cursor.position
             }),
-            Tag::ClassRef => Err(Error {
+            Tag::ClassRef => Err(error! {
+                self.cursor,
                 kind: Kind::Unsupported("Class Reference"),
                 context: vec![Context::FindingTag],
-                span: span!(self),
+                start: self.cursor.position,
+                end: self.cursor.position
             }),
-            Tag::ModuleRef => Err(Error {
-                kind: Kind::Unsupported("Module Reference"),
+            Tag::ModuleRef => Err(error! {
+                self.cursor,
+                kind: Kind::Unsupported("Moduel Reference"),
                 context: vec![Context::FindingTag],
-                span: span!(self),
+                start: self.cursor.position,
+                end: self.cursor.position
             }),
-            Tag::Extended => Err(Error {
-                kind: Kind::Unsupported("Extended object"),
+            Tag::Extended => Err(error! {
+                self.cursor,
+                kind: Kind::Unsupported("Extended Object"),
                 context: vec![Context::FindingTag],
-                span: span!(self),
+                start: self.cursor.position,
+                end: self.cursor.position
             }),
-            Tag::UserMarshal => Err(Error {
+            Tag::UserMarshal => Err(error! {
+                self.cursor,
                 kind: Kind::Unsupported("User marshal (object serialized as another)"),
                 context: vec![Context::FindingTag],
-                span: span!(self),
+                start: self.cursor.position,
+                end: self.cursor.position
             }), // FIXME: Find better name
-            Tag::Struct => Err(Error {
+            Tag::Struct => Err(error! {
+                self.cursor,
                 kind: Kind::Unsupported("Ruby struct"),
                 context: vec![Context::FindingTag],
-                span: span!(self),
+                start: self.cursor.position,
+                end: self.cursor.position
             }), // FIXME: change this in the future
         }
     }
@@ -601,10 +631,7 @@ struct ArraySeq<'de, 'a> {
 impl<'de, 'a> SeqAccess<'de> for ArraySeq<'de, 'a> {
     type Error = Error;
 
-    fn next_element_seed<T>(
-        &mut self,
-        seed: T,
-    ) -> std::result::Result<Option<T::Value>, Self::Error>
+    fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>>
     where
         T: de::DeserializeSeed<'de>,
     {
@@ -634,7 +661,7 @@ struct HashSeq<'de, 'a> {
 impl<'de, 'a> MapAccess<'de> for HashSeq<'de, 'a> {
     type Error = Error;
 
-    fn next_key_seed<K>(&mut self, seed: K) -> std::result::Result<Option<K::Value>, Self::Error>
+    fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>>
     where
         K: de::DeserializeSeed<'de>,
     {
@@ -650,7 +677,7 @@ impl<'de, 'a> MapAccess<'de> for HashSeq<'de, 'a> {
         ))
     }
 
-    fn next_value_seed<V>(&mut self, seed: V) -> std::result::Result<V::Value, Self::Error>
+    fn next_value_seed<V>(&mut self, seed: V) -> Result<V::Value>
     where
         V: de::DeserializeSeed<'de>,
     {
@@ -676,7 +703,7 @@ struct ObjKeyDeserializer<'a, 'de>(&'a mut Deserializer<'de>);
 impl<'a, 'de> serde::Deserializer<'de> for ObjKeyDeserializer<'a, 'de> {
     type Error = Error;
 
-    fn deserialize_any<V>(self, visitor: V) -> std::result::Result<V::Value, Self::Error>
+    fn deserialize_any<V>(self, visitor: V) -> Result<V::Value>
     where
         V: VisitorExt<'de>,
     {
@@ -696,7 +723,7 @@ impl<'a, 'de> serde::Deserializer<'de> for ObjKeyDeserializer<'a, 'de> {
 impl<'de, 'a> MapAccess<'de> for ObjSeq<'de, 'a> {
     type Error = Error;
 
-    fn next_key_seed<K>(&mut self, seed: K) -> std::result::Result<Option<K::Value>, Self::Error>
+    fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>>
     where
         K: de::DeserializeSeed<'de>,
     {
@@ -713,7 +740,7 @@ impl<'de, 'a> MapAccess<'de> for ObjSeq<'de, 'a> {
         ))
     }
 
-    fn next_value_seed<V>(&mut self, seed: V) -> std::result::Result<V::Value, Self::Error>
+    fn next_value_seed<V>(&mut self, seed: V) -> Result<V::Value>
     where
         V: de::DeserializeSeed<'de>,
     {

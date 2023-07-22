@@ -28,6 +28,8 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub struct Error {
     #[source]
     pub kind: Kind,
+    #[source_code]
+    pub source: Source,
     #[label("this bit here")]
     pub span: miette::SourceSpan,
     #[related]
@@ -144,6 +146,143 @@ pub enum Context {
     ReadingBytes(usize),
 }
 
+#[derive(Debug, Clone)]
+pub struct Source {
+    hex_source: String,
+    source_len: usize,
+}
+
+impl Source {
+    pub fn new(data: &[u8]) -> Self {
+        use std::fmt::Write;
+
+        let mut hex_source = String::new();
+        let max_address_len = data.len().ilog(16).max(4) as usize;
+
+        let mut chunks = data.chunks_exact(16);
+        for (line, data) in chunks.by_ref().enumerate() {
+            write!(hex_source, "{:0max_address_len$x}  ", line * 16).unwrap();
+            for byte in data {
+                write!(hex_source, "{byte:02x} ").unwrap();
+            }
+            write!(hex_source, "| ").unwrap();
+            for &byte in data {
+                if byte.is_ascii_alphanumeric() || byte.is_ascii_punctuation() {
+                    hex_source.push(byte as char);
+                } else {
+                    hex_source.push('.');
+                }
+            }
+            hex_source.push('\n');
+        }
+
+        if !chunks.remainder().is_empty() {
+            write!(hex_source, "{:0max_address_len$x}  ", data.len() / 16 * 16).unwrap();
+            for byte in chunks.remainder() {
+                write!(hex_source, "{byte:02x} ").unwrap();
+            }
+            for _ in 0..(16 - chunks.remainder().len()) {
+                write!(hex_source, "   ").unwrap();
+            }
+            write!(hex_source, "| ").unwrap();
+            for &byte in chunks.remainder() {
+                if byte.is_ascii_alphanumeric() || byte.is_ascii_punctuation() {
+                    hex_source.push(byte as char);
+                } else {
+                    hex_source.push('.');
+                }
+            }
+            for _ in 0..(16 - chunks.remainder().len()) {
+                write!(hex_source, " ").unwrap();
+            }
+        }
+
+        Source {
+            hex_source,
+            source_len: data.len(),
+        }
+    }
+}
+
+impl miette::SourceCode for Source {
+    fn read_span<'a>(
+        &'a self,
+        &span: &miette::SourceSpan,
+        context_lines_before: usize,
+        context_lines_after: usize,
+    ) -> std::result::Result<Box<dyn miette::SpanContents<'a> + 'a>, miette::MietteError> {
+        struct Contents<'b> {
+            contents: &'b str,
+            span: miette::SourceSpan,
+            line: usize,
+            line_count: usize,
+            column: usize,
+        }
+
+        impl<'b> miette::SpanContents<'b> for Contents<'b> {
+            fn data(&self) -> &'b [u8] {
+                self.contents.as_bytes()
+            }
+
+            fn span(&self) -> &miette::SourceSpan {
+                &self.span
+            }
+
+            fn line(&self) -> usize {
+                self.line
+            }
+
+            fn line_count(&self) -> usize {
+                self.line_count
+            }
+
+            fn column(&self) -> usize {
+                self.column
+            }
+        }
+
+        if span.len() + span.offset() > self.source_len {
+            return Err(miette::MietteError::OutOfBounds);
+        }
+
+        let line = span.offset() / 16;
+        let start_line = line.saturating_sub(context_lines_before);
+        let end_line = (line + context_lines_after).min(self.hex_source.len() / 16);
+
+        let max_address_len = self.source_len.ilog(16).max(4) as usize;
+        let line_len = 69 + max_address_len;
+
+        let start = start_line * line_len;
+        let end = end_line * line_len - 1;
+
+        // let offset = span.offset();
+        // let line = offset / 16 * line_len;
+        // let line_offset = offset % 16;
+        // let offset = (line + line_offset);
+
+        // ????
+        let span = miette::SourceSpan::new(60.into(), 3.into());
+
+        println!("{start}..{end} {}", self.hex_source.len());
+        println!("{span:#?}");
+        println!("{}", self.hex_source);
+
+        let contents = &self.hex_source[start..end];
+        let line_count = end_line - start_line;
+
+        println!("{contents}");
+
+        let contents = Contents {
+            contents,
+            span,
+            column: 0,
+            line,
+            line_count,
+        };
+        Ok(Box::new(contents))
+    }
+}
+
 #[allow(unused_macros)]
 macro_rules! bubble_error {
     ($bubble:expr, $($context:expr),+ $(,)?) => {
@@ -165,6 +304,10 @@ impl serde::de::Error for Error {
     {
         Error {
             kind: Kind::Message(msg.to_string()),
+            source: Source {
+                hex_source: String::new(),
+                source_len: 0,
+            }, // FIXME: this doesn't contain the data
             context: vec![],
             span: (0..0).into(),
         }

@@ -77,7 +77,7 @@ pub mod value;
 
 pub use de::{Deserializer, Error as DeError, VisitorExt};
 pub use ser::{Error as SerError, SerializeExt, Serializer};
-pub use value::{Object, RbArray, RbHash, RbString, Symbol, Userdata, Value};
+pub use value::{from_value, to_value, Object, RbArray, RbHash, RbString, Symbol, Userdata, Value};
 
 /// Deserialize data from some bytes.
 /// It's a convenience function over [`Deserializer::new`] and [`serde::Deserialize`].
