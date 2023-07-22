@@ -25,14 +25,17 @@ pub struct Symbol(pub String);
 
 #[allow(clippy::must_use_candidate)]
 impl Symbol {
+    /// Get this symbol as a borrowed str.
     pub fn as_str(&self) -> &str {
         &self.0
     }
 
+    /// Get the length of this symbol.
     pub fn len(&self) -> usize {
         self.0.len()
     }
 
+    /// Returns true if the string data is empty.
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
@@ -127,6 +130,12 @@ impl From<String> for Symbol {
 impl From<Symbol> for String {
     fn from(value: Symbol) -> Self {
         value.0
+    }
+}
+
+impl ToString for Symbol {
+    fn to_string(&self) -> String {
+        self.0.clone()
     }
 }
 

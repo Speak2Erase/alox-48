@@ -15,7 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Luminol.  If not, see <http://www.gnu.org/licenses/>.
 use super::{Object, RbFields, RbHash, RbString, Symbol, Userdata, Value};
-use crate::ser::{bubble_error, Context, Error, Kind, Result, SerializeExt};
+use crate::ser::{Error, Kind, Result, SerializeExt};
 
 #[allow(clippy::panic_in_result_fn)]
 impl serde::Serialize for Value {
@@ -138,7 +138,6 @@ impl serde::ser::Serializer for Serializer {
     ) -> Result<Self::Ok> {
         Err(Error {
             kind: Kind::Unsupported("enums"),
-            context: vec![],
         })
     }
 
@@ -152,7 +151,6 @@ impl serde::ser::Serializer for Serializer {
     {
         Err(Error {
             kind: Kind::Unsupported("newtype struct"),
-            context: vec![],
         })
     }
 
@@ -168,7 +166,6 @@ impl serde::ser::Serializer for Serializer {
     {
         Err(Error {
             kind: Kind::Unsupported("enums"),
-            context: vec![],
         })
     }
 
@@ -196,7 +193,6 @@ impl serde::ser::Serializer for Serializer {
     ) -> Result<Self::SerializeTupleStruct> {
         Err(Error {
             kind: Kind::Unsupported("tuple struct"),
-            context: vec![],
         })
     }
 
@@ -209,7 +205,6 @@ impl serde::ser::Serializer for Serializer {
     ) -> Result<Self::SerializeTupleVariant> {
         Err(Error {
             kind: Kind::Unsupported("enums"),
-            context: vec![],
         })
     }
 
@@ -244,7 +239,6 @@ impl serde::ser::Serializer for Serializer {
     ) -> Result<Self::SerializeStructVariant> {
         Err(Error {
             kind: Kind::Unsupported("enums"),
-            context: vec![],
         })
     }
 }

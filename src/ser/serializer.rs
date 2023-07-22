@@ -19,7 +19,7 @@
 use indexmap::IndexSet;
 use serde::ser;
 
-use super::{bubble_error, Context, Error, Kind, Result};
+use super::{Error, Kind, Result};
 use crate::Symbol;
 
 /// The `alox_48` serializer.
@@ -247,7 +247,6 @@ impl<'a> ser::Serializer for &'a mut Serializer {
     ) -> Result<Self::Ok> {
         Err(Error {
             kind: Kind::Unsupported("enums"),
-            context: vec![],
         })
     }
 
@@ -261,7 +260,6 @@ impl<'a> ser::Serializer for &'a mut Serializer {
     {
         Err(Error {
             kind: Kind::Unsupported("newtype struct"),
-            context: vec![],
         })
     }
 
@@ -277,7 +275,6 @@ impl<'a> ser::Serializer for &'a mut Serializer {
     {
         Err(Error {
             kind: Kind::Unsupported("enums"),
-            context: vec![],
         })
     }
 
@@ -285,7 +282,6 @@ impl<'a> ser::Serializer for &'a mut Serializer {
         let Some(len) = len else {
             return Err(Error {
                 kind: Kind::Unsupported("sequences with no size hints"),
-                context: vec![],
             });
         }; // FIXME: Find a solution to this
 
@@ -309,7 +305,6 @@ impl<'a> ser::Serializer for &'a mut Serializer {
     ) -> Result<Self::SerializeTupleStruct> {
         Err(Error {
             kind: Kind::Unsupported("tuple struct"),
-            context: vec![],
         })
     }
 
@@ -322,7 +317,6 @@ impl<'a> ser::Serializer for &'a mut Serializer {
     ) -> Result<Self::SerializeTupleVariant> {
         Err(Error {
             kind: Kind::Unsupported("enums"),
-            context: vec![],
         })
     }
 
@@ -330,7 +324,6 @@ impl<'a> ser::Serializer for &'a mut Serializer {
         let Some(len) = len else {
             return Err(Error {
                 kind: Kind::Unsupported("maps with no size hints"),
-                context: vec![],
             });
         }; // FIXME: Find a solution to this
 
@@ -358,7 +351,6 @@ impl<'a> ser::Serializer for &'a mut Serializer {
     ) -> Result<Self::SerializeStructVariant> {
         Err(Error {
             kind: Kind::Unsupported("enums"),
-            context: vec![],
         })
     }
 }

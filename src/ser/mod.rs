@@ -18,8 +18,8 @@ mod error;
 mod extension;
 mod serializer;
 
-pub(crate) use error::{bubble_error, Context, Kind, Result};
+pub(crate) use error::Result;
 
-pub use error::Error;
+pub use error::{Error, Kind};
 pub use extension::{SerializeExt, SerializeObject};
 pub use serializer::Serializer;

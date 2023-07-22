@@ -32,10 +32,5 @@ fn main() {
 
     let error = alox_48::from_bytes::<alox_48::Value>(data.as_slice()).expect_err("success??");
 
-    let mut report = String::new();
-    miette::GraphicalReportHandler::new()
-        .render_report(&mut report, &error)
-        .unwrap();
-
-    println!("{report}");
+    println!("{error}");
 }

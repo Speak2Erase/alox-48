@@ -19,8 +19,8 @@ mod deserializer;
 mod error;
 mod extension;
 
-pub(crate) use error::{bubble_error, Result, Source};
+pub(crate) use error::Result;
 
 pub use deserializer::Deserializer;
-pub use error::{Context, Error, Kind};
+pub use error::{Error, Kind};
 pub use extension::VisitorExt;

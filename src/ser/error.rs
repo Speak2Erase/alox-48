@@ -19,13 +19,11 @@
 /// Type alias around a result.
 pub type Result<T> = std::result::Result<T, Error>;
 
-#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+#[derive(Debug, thiserror::Error)]
 #[error("Serialization error")]
 pub struct Error {
     #[source]
     pub kind: Kind,
-    #[related]
-    pub context: Vec<Context>,
 }
 
 /// Error type for this crate.
@@ -55,54 +53,6 @@ pub enum Kind {
     Message(String),
 }
 
-#[derive(Debug, thiserror::Error, miette::Diagnostic)]
-pub enum Context {
-    #[error("While seserializing a struct {0} with {1} fields")]
-    Struct(String, usize),
-    #[error("While seserializing an object {0} with {1} fields")]
-    Object(String, usize),
-    #[error("While seserializing a userdata {0} of len {1}")]
-    Userdata(String, usize),
-    #[error("While seserializing an array of len {0}")]
-    Array(usize),
-    #[error("While serializing a hash of len {0}")]
-    Hash(usize),
-    #[error("While serializing a key from a key value pair")]
-    Key,
-    #[error("While serializing a value from a key value pair")]
-    Value,
-
-    // Terminals (these happen at the end of a backtrace)
-    #[error("While serializing a symbol")]
-    Symbol,
-    #[error("While serializing an already present symbol at {0}")]
-    Symlink(usize),
-    #[error("While serializing an already present object at {0}")]
-    Objectlink(usize),
-    #[error("While serializing string text")]
-    StringText,
-    #[error("While serializing string fields")]
-    StringFields,
-    #[error("While serializing an integer")]
-    Integer,
-    #[error("While serializing a float")]
-    Float,
-}
-
-#[allow(unused_macros)]
-macro_rules! bubble_error {
-    ($bubble:expr, $($context:expr),+ $(,)?) => {
-        match $bubble {
-            Ok(o) => o,
-            Err(mut e) => {
-                $(e.context.push($context);)+
-                return Err(e);
-            }
-        }
-    };
-}
-pub(crate) use bubble_error;
-
 impl serde::ser::Error for Error {
     fn custom<T>(msg: T) -> Self
     where
@@ -110,7 +60,6 @@ impl serde::ser::Error for Error {
     {
         Error {
             kind: Kind::Message(msg.to_string()),
-            context: vec![],
         }
     }
 }
