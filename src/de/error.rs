@@ -24,7 +24,7 @@ use crate::tag::Tag;
 pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug, thiserror::Error)]
-#[error("Deserialization error")]
+#[error("{kind}")]
 pub struct Error {
     #[source]
     pub kind: Kind,

@@ -20,7 +20,7 @@
 pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug, thiserror::Error)]
-#[error("Serialization error")]
+#[error("{kind}")]
 pub struct Error {
     #[source]
     pub kind: Kind,
