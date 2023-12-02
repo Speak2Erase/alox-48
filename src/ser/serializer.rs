@@ -490,7 +490,7 @@ impl<'a> super::SerializeObject for &'a mut Serializer {
     where
         T: serde::Serialize,
     {
-        self.write_symbol(&format!("@{key}"));
+        self.write_symbol(&format!("@{}", key.as_str()));
 
         T::serialize(value, &mut **self)
     }
