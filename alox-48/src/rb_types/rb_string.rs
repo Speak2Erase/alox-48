@@ -15,7 +15,6 @@
 // You should have received a copy of the GNU General Public License
 // along with alox-48.  If not, see <http://www.gnu.org/licenses/>.
 use super::RbFields;
-use crate::DeError;
 
 /// A type equivalent to ruby's `String`.
 /// ruby strings do not have to be utf8 encoded, so this type uses [`Vec<u8>`] instead.
@@ -69,100 +68,6 @@ impl RbString {
     /// Splits this string into its constituants.
     pub fn into_parts(self) -> (Vec<u8>, RbFields) {
         (self.data, self.fields)
-    }
-}
-
-impl serde::Serialize for RbString {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: crate::SerializeExt,
-    {
-        serializer.serialize_ruby_string(self)
-    }
-}
-
-impl<'de> serde::Deserialize<'de> for RbString {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        struct StringVisitor;
-
-        impl<'de> serde::de::Visitor<'de> for StringVisitor {
-            type Value = RbString;
-
-            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                formatter.write_str("a ruby string")
-            }
-
-            fn visit_borrowed_str<E>(self, v: &'de str) -> Result<Self::Value, E>
-            where
-                E: serde::de::Error,
-            {
-                Ok(v.into())
-            }
-
-            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-            where
-                E: serde::de::Error,
-            {
-                Ok(v.into())
-            }
-
-            fn visit_string<E>(self, v: String) -> Result<Self::Value, E>
-            where
-                E: serde::de::Error,
-            {
-                Ok(v.into())
-            }
-        }
-
-        impl<'de> crate::VisitorExt<'de> for StringVisitor {
-            fn visit_ruby_string<A>(
-                self,
-                data: &'de [u8],
-                fields: A,
-            ) -> Result<Self::Value, DeError>
-            where
-                A: serde::de::MapAccess<'de, Error = DeError>,
-            {
-                let fields = serde::Deserialize::deserialize(
-                    serde::de::value::MapAccessDeserializer::new(fields),
-                )?;
-                Ok(RbString {
-                    data: data.to_vec(),
-                    fields,
-                })
-            }
-        }
-
-        deserializer.deserialize_any(StringVisitor)
-    }
-}
-
-impl<'de> serde::Deserializer<'de> for &'de RbString {
-    type Error = DeError;
-
-    fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
-    where
-        V: crate::VisitorExt<'de>,
-    {
-        let fields = serde::de::value::MapDeserializer::new(self.fields.iter());
-        visitor.visit_ruby_string(&self.data, fields)
-    }
-
-    serde::forward_to_deserialize_any! {
-        bool i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 f32 f64 char str
-        string bytes byte_buf unit unit_struct newtype_struct seq tuple
-        option tuple_struct map struct enum identifier ignored_any
-    }
-}
-
-impl<'de> serde::de::IntoDeserializer<'de, DeError> for &'de RbString {
-    type Deserializer = Self;
-
-    fn into_deserializer(self) -> Self::Deserializer {
-        self
     }
 }
 

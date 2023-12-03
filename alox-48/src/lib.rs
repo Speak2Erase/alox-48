@@ -8,7 +8,6 @@
     clippy::panicking_unwrap,
     clippy::all
 )]
-#![forbid(unsafe_code)]
 
 //! alox-48
 //! (short for aluminum oxide 48)
@@ -78,7 +77,7 @@ pub mod rb_types;
 pub use rb_types::{Object, RbArray, RbHash, RbString, Symbol, Userdata};
 
 pub use de::{Deserializer, Error as DeError};
-pub use ser::{Error as SerError, SerializeExt, Serializer};
+pub use ser::{Error as SerError, Serializer};
 pub use value::{from_value, to_value, Value};
 
 /// Deserialize data from some bytes.

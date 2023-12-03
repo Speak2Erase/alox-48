@@ -15,7 +15,6 @@
 // You should have received a copy of the GNU General Public License
 // along with alox-48.  If not, see <http://www.gnu.org/licenses/>.
 use super::Symbol;
-use crate::DeError;
 
 /// This type represents types serialized with `_dump` from ruby.
 /// Its main intended use is in [`Value`], but you can also use it with [`serde::Deserialize`]:
@@ -67,71 +66,5 @@ impl Userdata {
     #[allow(clippy::must_use_candidate)]
     pub fn into_parts(self) -> (Symbol, Vec<u8>) {
         (self.class, self.data)
-    }
-}
-
-impl serde::Serialize for Userdata {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: crate::SerializeExt,
-    {
-        serializer.serialize_userdata(&self.class, &self.data)
-    }
-}
-
-impl<'de> serde::Deserialize<'de> for Userdata {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        struct UserdataVisitor;
-
-        impl<'de> serde::de::Visitor<'de> for UserdataVisitor {
-            type Value = Userdata;
-
-            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                formatter.write_str("userdata")
-            }
-        }
-
-        impl<'de> crate::VisitorExt<'de> for UserdataVisitor {
-            fn visit_userdata(
-                self,
-                class: &'de str,
-                data: &'de [u8],
-            ) -> Result<Self::Value, DeError> {
-                Ok(Userdata {
-                    class: class.into(),
-                    data: data.to_vec(),
-                })
-            }
-        }
-
-        deserializer.deserialize_any(UserdataVisitor)
-    }
-}
-
-impl<'de> serde::Deserializer<'de> for &'de Userdata {
-    type Error = DeError;
-
-    fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
-    where
-        V: crate::VisitorExt<'de>,
-    {
-        visitor.visit_userdata(self.class.as_str(), &self.data)
-    }
-
-    serde::forward_to_deserialize_any! {
-        bool i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 f32 f64 char str
-        string bytes byte_buf unit unit_struct newtype_struct seq tuple
-        option tuple_struct map struct enum identifier ignored_any
-    }
-}
-
-impl<'de> serde::de::IntoDeserializer<'de, DeError> for &'de Userdata {
-    type Deserializer = Self;
-
-    fn into_deserializer(self) -> Self::Deserializer {
-        self
     }
 }

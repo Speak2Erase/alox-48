@@ -19,6 +19,7 @@ use indexmap::IndexMap;
 
 mod object;
 mod rb_string;
+mod sym;
 mod symbol;
 mod userdata;
 
