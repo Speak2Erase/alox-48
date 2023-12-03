@@ -22,8 +22,7 @@ mod ser;
 
 pub use ser::Serializer;
 
-mod types;
-pub use types::{Object, RbArray, RbFields, RbHash, RbString, Symbol, Userdata};
+use crate::rb_types::{Object, RbArray, RbFields, RbHash, RbString, Symbol, Userdata};
 
 /// An enum representing any ruby value.
 /// Similar to `serde_json::Value`, although much more nuanced.

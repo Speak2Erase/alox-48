@@ -9,7 +9,6 @@
     clippy::all
 )]
 #![forbid(unsafe_code)]
-#![feature(min_specialization)]
 
 //! alox-48
 //! (short for aluminum oxide 48)
@@ -75,9 +74,12 @@ pub mod ser;
 /// Useful for deserializing untyped data.
 pub mod value;
 
-pub use de::{Deserializer, Error as DeError, VisitorExt};
+pub mod rb_types;
+pub use rb_types::{Object, RbArray, RbHash, RbString, Symbol, Userdata};
+
+pub use de::{Deserializer, Error as DeError};
 pub use ser::{Error as SerError, SerializeExt, Serializer};
-pub use value::{from_value, to_value, Object, RbArray, RbHash, RbString, Symbol, Userdata, Value};
+pub use value::{from_value, to_value, Value};
 
 /// Deserialize data from some bytes.
 /// It's a convenience function over [`Deserializer::new`] and [`serde::Deserialize`].
