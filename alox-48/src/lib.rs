@@ -80,11 +80,14 @@ pub use de::{
     ArrayAccess, Deserialize, Deserializer, DeserializerTrait, Error as DeError, HashAccess,
     IvarAccess, Visitor,
 };
-pub use ser::{Error as SerError, Serializer};
+pub use ser::{
+    Error as SerError, Serialize, SerializeArray, SerializeHash, SerializeIvars, Serializer,
+    SerializerTrait,
+};
 pub use value::{from_value, to_value, Value};
 
 /// Deserialize data from some bytes.
-/// It's a convenience function over [`Deserializer::new`] and [`serde::Deserialize`].
+/// It's a convenience function over [`Deserializer::new`] and [`Deserialize::deserialize`].
 #[allow(clippy::missing_errors_doc)]
 pub fn from_bytes<'de, T>(data: &'de [u8]) -> Result<T, DeError>
 where
@@ -104,7 +107,7 @@ where
 /// - Unit Structs
 pub fn to_bytes<T>(data: T) -> Result<Vec<u8>, SerError>
 where
-    T: serde::Serialize,
+    T: Serialize,
 {
     let mut serializer = Serializer::new();
     data.serialize(&mut serializer)?;

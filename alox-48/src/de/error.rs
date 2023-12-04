@@ -130,7 +130,7 @@ where
     }
 }
 
-impl std::fmt::Display for dyn Expected {
+impl<'a> std::fmt::Display for dyn Expected + 'a {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Expected::fmt(self, f)
     }
@@ -175,7 +175,7 @@ impl Error {
         }
     }
 
-    fn invalid_type(unexpected: Unexpected<'_>, exp: &dyn Expected) -> Self {
+    pub fn invalid_type(unexpected: Unexpected<'_>, exp: &dyn Expected) -> Self {
         Self::custom(format!("invalid type: {unexpected}, expected `{exp}`"))
     }
 

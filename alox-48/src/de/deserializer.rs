@@ -219,17 +219,9 @@ impl<'de> Deserializer<'de> {
     }
 
     fn read_symbol(&mut self) -> Result<&'de Sym> {
-        let out = self.read_bytes_len()?;
+        let out = self.read_str_len()?;
 
-        let str = match std::str::from_utf8(out) {
-            Ok(a) => a,
-            Err(err) => {
-                return Err(Error {
-                    kind: Kind::SymbolInvalidUTF8(err),
-                });
-            }
-        };
-        let sym = Sym::new(str);
+        let sym = Sym::new(out);
 
         if self.stack.is_empty() {
             self.sym_table.push(sym);
@@ -278,6 +270,15 @@ impl<'de> Deserializer<'de> {
     fn read_bytes_len(&mut self) -> Result<&'de [u8]> {
         let len = self.read_usize()?;
         self.cursor.next_bytes_dyn(len)
+    }
+
+    fn read_str_len(&mut self) -> Result<&'de str> {
+        let len = self.read_usize()?;
+        let bytes = self.cursor.next_bytes_dyn(len)?;
+
+        std::str::from_utf8(bytes).map_err(|e| Error {
+            kind: Kind::SymbolInvalidUTF8(e),
+        })
     }
 }
 
@@ -452,12 +453,15 @@ impl<'de, 'a> super::DeserializerTrait<'de> for &'a mut Deserializer<'de> {
                 visitor.visit_regular_expression(regex, flags)
             }
             Tag::ClassRef => {
-                let class = self.read_symbol_either()?;
-                visitor.visit_class(class)
+                // In my testing this isn't a symbol. How strange!
+                let class = self.read_str_len()?;
+
+                visitor.visit_class(Sym::new(class))
             }
             Tag::ModuleRef => {
-                let module = self.read_symbol_either()?;
-                visitor.visit_module(module)
+                let module = self.read_str_len()?;
+
+                visitor.visit_module(Sym::new(module))
             }
             // the ruby docs are wrong about this actually!
             // they say the object comes first, then the module, but actually it's the other way around.
@@ -504,10 +508,10 @@ impl<'de, 'a> super::DeserializerTrait<'de> for &'a mut Deserializer<'de> {
     }
 }
 
-impl<'de, 'a> super::InstanceAccess<'de> for InstanceAccess<'de, 'a> {
+impl<'de, 'a> super::InstanceAccess<'de> for &'a mut InstanceAccess<'de, 'a> {
     type IvarAccess = IvarAccess<'de, 'a>;
 
-    fn value<V>(mut self, visitor: V) -> Result<(V::Value, Self::IvarAccess)>
+    fn value<V>(self, visitor: V) -> Result<(V::Value, Self::IvarAccess)>
     where
         V: Visitor<'de>,
     {

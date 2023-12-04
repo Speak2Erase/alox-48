@@ -20,7 +20,7 @@ use indexmap::IndexSet;
 use serde::ser;
 
 use super::{Error, Kind, Result};
-use crate::Symbol;
+use crate::{Sym, Symbol};
 
 /// The `alox_48` serializer.
 ///
@@ -33,7 +33,28 @@ use crate::Symbol;
 pub struct Serializer {
     /// The underlying output of the serializer.
     pub output: Vec<u8>,
-    symlink: IndexSet<String>,
+    symlink: IndexSet<Symbol>,
+}
+
+#[derive(Debug)]
+pub struct SerializeIvars<'a> {
+    serializer: &'a mut Serializer,
+    len: usize,
+    index: usize,
+}
+
+#[derive(Debug)]
+pub struct SerializeHash<'a> {
+    serializer: &'a mut Serializer,
+    len: usize,
+    index: usize,
+}
+
+#[derive(Debug)]
+pub struct SerializeArray<'a> {
+    serializer: &'a mut Serializer,
+    len: usize,
+    index: usize,
 }
 
 impl Default for Serializer {
@@ -63,9 +84,9 @@ impl Serializer {
     )]
     fn write_int(&mut self, v: i64) {
         match v {
-            0 => self.append(0),
-            1..=122 => self.append(v as u8 + 5),
-            -122..=0 => self.append((256 + v - 5) as u8),
+            0 => self.write(0),
+            1..=122 => self.write(v as u8 + 5),
+            -122..=0 => self.write((256 + v - 5) as u8),
             mut v => {
                 let mut res = vec![];
 
@@ -86,24 +107,24 @@ impl Serializer {
                     res.len() as _
                 };
 
-                self.append(l_byte);
-                self.output.append(&mut res);
+                self.write(l_byte);
+                self.write_bytes(res);
             }
         }
     }
 
-    fn append(&mut self, b: u8) {
+    fn write(&mut self, b: u8) {
         self.output.push(b);
     }
 
-    fn write_symbol(&mut self, symbol: &str) {
+    fn write_symbol(&mut self, symbol: &Sym) {
         if let Some(idx) = self.symlink.get_index_of(symbol) {
-            self.append(b';');
+            self.write(b';');
             self.write_int(idx as _);
         } else {
-            self.symlink.insert(symbol.to_string());
+            self.symlink.insert(symbol.to_symbol());
 
-            self.append(b':');
+            self.write(b':');
             self.write_int(symbol.len() as _);
 
             self.write_bytes(symbol);
@@ -112,23 +133,286 @@ impl Serializer {
 
     fn write_bytes(&mut self, bytes: impl AsRef<[u8]>) {
         for &b in bytes.as_ref() {
-            self.append(b);
+            self.write(b);
+        }
+    }
+
+    fn write_bytes_len(&mut self, bytes: impl AsRef<[u8]>) {
+        let bytes = bytes.as_ref();
+
+        self.write_int(bytes.len() as _);
+        self.write_bytes(bytes)
+    }
+}
+
+impl<'a> super::SerializerTrait for &'a mut Serializer {
+    type Ok = ();
+
+    type SerializeIvars = SerializeIvars<'a>;
+    type SerializeHash = SerializeHash<'a>;
+    type SerializeArray = SerializeArray<'a>;
+
+    fn serialize_nil(self) -> Result<Self::Ok> {
+        self.write(b'0');
+
+        Ok(())
+    }
+
+    fn serialize_bool(self, v: bool) -> Result<Self::Ok> {
+        self.write(if v { b'T' } else { b'F' });
+
+        Ok(())
+    }
+
+    fn serialize_i32(self, v: i32) -> Result<Self::Ok> {
+        self.write(b'i');
+        self.write_int(v as i64);
+
+        Ok(())
+    }
+
+    fn serialize_f64(self, v: f64) -> Result<Self::Ok> {
+        self.write(b'f');
+
+        let str = v.to_string();
+        self.write_bytes_len(str);
+
+        Ok(())
+    }
+
+    fn serialize_hash(self, len: usize) -> Result<Self::SerializeHash> {
+        self.write(b'{');
+        self.write_int(len as _);
+
+        Ok(SerializeHash {
+            serializer: self,
+            len,
+            index: 0,
+        })
+    }
+
+    fn serialize_array(self, len: usize) -> Result<Self::SerializeArray> {
+        self.write(b'[');
+        self.write_int(len as _);
+
+        Ok(SerializeArray {
+            serializer: self,
+            len,
+            index: 0,
+        })
+    }
+
+    fn serialize_string(self, data: &[u8]) -> Result<Self::Ok> {
+        self.write(b'"');
+        self.write_bytes_len(data);
+
+        Ok(())
+    }
+
+    fn serialize_symbol(self, sym: &Sym) -> Result<Self::Ok> {
+        self.write_symbol(sym);
+
+        Ok(())
+    }
+
+    fn serialize_regular_expression(self, regex: &[u8], flags: u8) -> Result<Self::Ok> {
+        self.write(b'/');
+        self.write_bytes_len(regex);
+        self.write(flags);
+
+        Ok(())
+    }
+
+    fn serialize_object(self, class: &Sym, len: usize) -> Result<Self::SerializeIvars> {
+        self.write(b'o');
+        self.write_symbol(class);
+        self.write_int(len as _);
+
+        Ok(SerializeIvars {
+            serializer: self,
+            len,
+            index: 0,
+        })
+    }
+
+    fn serialize_struct(self, name: &Sym, len: usize) -> Result<Self::SerializeIvars> {
+        self.write(b'S');
+        self.write_symbol(name);
+        self.write_int(len as _);
+
+        Ok(SerializeIvars {
+            serializer: self,
+            len,
+            index: 0,
+        })
+    }
+
+    fn serialize_class(self, class: &Sym) -> Result<Self::Ok> {
+        self.write(b'c');
+        // Apparently, this isn't a symbol. How strange!
+        self.write_bytes_len(class);
+
+        Ok(())
+    }
+
+    fn serialize_module(self, module: &Sym) -> Result<Self::Ok> {
+        self.write(b'm');
+        self.write_bytes_len(module);
+
+        Ok(())
+    }
+
+    fn serialize_instance<V>(self, value: &V, len: usize) -> Result<Self::SerializeIvars>
+    where
+        V: crate::Serialize + ?Sized,
+    {
+        self.write(b'I');
+        value.serialize(&mut *self)?;
+        self.write_int(len as _);
+
+        Ok(SerializeIvars {
+            serializer: self,
+            len,
+            index: 0,
+        })
+    }
+
+    fn serialize_extended<V>(self, module: &Sym, value: &V) -> Result<Self::Ok>
+    where
+        V: crate::Serialize + ?Sized,
+    {
+        // the ruby docs lie! it is the module which comes before the value.
+        self.write(b'e');
+        self.write_symbol(module);
+        value.serialize(self)
+    }
+
+    fn serialize_user_class<V>(self, class: &Sym, value: &V) -> Result<Self::Ok>
+    where
+        V: crate::Serialize + ?Sized,
+    {
+        self.write(b'C');
+        self.write_symbol(class);
+        value.serialize(self)
+    }
+
+    fn serialize_user_data(self, class: &Sym, data: &[u8]) -> Result<Self::Ok> {
+        self.write(b'u');
+        self.write_symbol(class);
+        self.write_bytes(data);
+
+        Ok(())
+    }
+
+    fn serialize_user_marshal<V>(self, class: &Sym, value: &V) -> Result<Self::Ok>
+    where
+        V: crate::Serialize + ?Sized,
+    {
+        self.write(b'U');
+        self.write_symbol(class);
+        value.serialize(self)
+    }
+
+    fn serialize_data<V>(self, class: &Sym, value: &V) -> Result<Self::Ok>
+    where
+        V: crate::Serialize + ?Sized,
+    {
+        self.write(b'd');
+        self.write_symbol(class);
+        value.serialize(self)
+    }
+}
+
+impl<'a> super::SerializeIvars for SerializeIvars<'a> {
+    type Ok = ();
+
+    fn serialize_field(&mut self, k: &Sym) -> Result<()> {
+        self.index += 1;
+        if self.index > self.len {
+            return Err(Error {
+                kind: Kind::OvershotProvidedLen(self.len),
+            });
+        }
+
+        self.serializer.write_symbol(k);
+
+        Ok(())
+    }
+
+    fn serialize_value<V>(&mut self, v: &V) -> Result<()>
+    where
+        V: crate::Serialize + ?Sized,
+    {
+        v.serialize(&mut *self.serializer)?;
+
+        Ok(())
+    }
+
+    fn end(self) -> Result<Self::Ok> {
+        if self.index < self.len {
+            Err(Error {
+                kind: Kind::UndershotProvidedLen(self.len),
+            })
+        } else {
+            Ok(())
         }
     }
 }
 
-macro_rules! serialize_int {
-    ($($int:ty),*) => {
-        paste::paste! {
-            $(
-                fn [<serialize_ $int>](self, v: $int) -> Result<Self::Ok> {
-                    self.append(b'i');
+impl<'a> super::SerializeHash for SerializeHash<'a> {
+    type Ok = ();
 
-                    self.write_int(v as _);
-
-                    Ok(())
-                }
-            )*
+    fn serialize_key<K>(&mut self, k: &K) -> Result<()>
+    where
+        K: crate::Serialize + ?Sized,
+    {
+        self.index += 1;
+        if self.index > self.len {
+            return Err(Error {
+                kind: Kind::OvershotProvidedLen(self.len),
+            });
         }
-    };
+
+        k.serialize(&mut *self.serializer)?;
+
+        Ok(())
+    }
+
+    fn serialize_value<V>(&mut self, v: &V) -> Result<()>
+    where
+        V: crate::Serialize + ?Sized,
+    {
+        v.serialize(&mut *self.serializer)
+    }
+
+    fn end(self) -> Result<Self::Ok> {
+        if self.index < self.len {
+            Err(Error {
+                kind: Kind::UndershotProvidedLen(self.len),
+            })
+        } else {
+            Ok(())
+        }
+    }
+}
+
+impl<'a> super::SerializeArray for SerializeArray<'a> {
+    type Ok = ();
+
+    fn serialize_element<T>(&mut self, v: &T) -> Result<()>
+    where
+        T: crate::Serialize + ?Sized,
+    {
+        v.serialize(&mut *self.serializer)
+    }
+
+    fn end(self) -> Result<Self::Ok> {
+        if self.index < self.len {
+            Err(Error {
+                kind: Kind::UndershotProvidedLen(self.len),
+            })
+        } else {
+            Ok(())
+        }
+    }
 }

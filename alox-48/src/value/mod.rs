@@ -93,9 +93,10 @@ pub enum Value {
 #[allow(clippy::module_name_repetitions)]
 pub fn from_value<'de, T>(value: &'de Value) -> Result<T, crate::DeError>
 where
-    T: serde::de::Deserialize<'de>,
+    T: crate::Deserialize<'de>,
 {
-    T::deserialize(value)
+    todo!()
+    // T::deserialize(value)
 }
 
 /// Convert a `T` into `alox_48::Value`.
@@ -128,7 +129,8 @@ where
 #[allow(clippy::module_name_repetitions)]
 pub fn to_value<T>(value: T) -> Result<Value, crate::SerError>
 where
-    T: serde::Serialize,
+    T: crate::Serialize,
 {
-    T::serialize(&value, ser::Serializer)
+    todo!()
+    // T::serialize(&value, ser::Serializer)
 }

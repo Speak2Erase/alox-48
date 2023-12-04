@@ -49,6 +49,10 @@ pub enum Kind {
     /// ```
     #[error("Unsupported data encountered: {0}. This is probably because it does not map well to Rust's type system")]
     Unsupported(&'static str),
+    #[error("Overshot the provided len: {0}")]
+    OvershotProvidedLen(usize),
+    #[error("Undershot the provided len: {0}")]
+    UndershotProvidedLen(usize),
     #[error("Serde error: {0}")]
     Message(String),
 }

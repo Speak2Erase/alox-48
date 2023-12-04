@@ -188,20 +188,6 @@ pub trait ArrayAccess<'de> {
         T: Deserialize<'de>;
 }
 
-impl<'de, 'a, A> InstanceAccess<'de> for &'a mut A
-where
-    A: InstanceAccess<'de>,
-{
-    type IvarAccess = A::IvarAccess;
-
-    fn value<V>(self, visitor: V) -> Result<(V::Value, Self::IvarAccess)>
-    where
-        V: Visitor<'de>,
-    {
-        (*self).value(visitor)
-    }
-}
-
 impl<'de, 'a, A> IvarAccess<'de> for &'a mut A
 where
     A: IvarAccess<'de>,

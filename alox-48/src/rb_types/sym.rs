@@ -44,11 +44,25 @@ impl Sym {
     pub fn to_rust_field_name(&self) -> Option<&Self> {
         self.0.strip_prefix('@').map(Self::new)
     }
+
+    pub fn to_symbol(&self) -> Symbol {
+        self.to_owned()
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
 }
 
 impl AsRef<str> for Sym {
     fn as_ref(&self) -> &str {
         &self.0
+    }
+}
+
+impl AsRef<[u8]> for Sym {
+    fn as_ref(&self) -> &[u8] {
+        self.0.as_bytes()
     }
 }
 
@@ -66,43 +80,49 @@ impl Default for &Sym {
     }
 }
 
-impl std::fmt::Display for &Sym {
+impl std::fmt::Display for Sym {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_fmt(format_args!("\"{}\"", &self.0))
     }
 }
 
-impl std::fmt::Debug for &Sym {
+impl std::fmt::Debug for Sym {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_tuple("Sym").field(&&self.0).finish()
     }
 }
 
-impl From<&str> for &Sym {
-    fn from(value: &str) -> Self {
+impl std::hash::Hash for Sym {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state)
+    }
+}
+
+impl<'a> From<&'a str> for &'a Sym {
+    fn from(value: &'a str) -> Self {
         Sym::new(value)
     }
 }
 
-impl From<&Sym> for &str {
-    fn from(value: &Sym) -> Self {
+impl<'a> From<&'a Sym> for &'a str {
+    fn from(value: &'a Sym) -> Self {
         &value.0
     }
 }
 
-impl PartialEq<str> for &Sym {
+impl PartialEq<str> for Sym {
     fn eq(&self, other: &str) -> bool {
         self.0.eq(other)
     }
 }
 
-impl PartialEq<String> for &Sym {
+impl PartialEq<String> for Sym {
     fn eq(&self, other: &String) -> bool {
         self.0.eq(other)
     }
 }
 
-impl PartialEq<Symbol> for &Sym {
+impl PartialEq<Symbol> for Sym {
     fn eq(&self, other: &Symbol) -> bool {
         self.0.eq(&other.0)
     }
@@ -113,3 +133,5 @@ impl PartialEq<Sym> for Sym {
         self.0.eq(&other.0)
     }
 }
+
+impl Eq for Sym {}
