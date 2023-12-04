@@ -18,6 +18,7 @@
 mod deserializer;
 mod error;
 mod ignored;
+mod impls;
 mod traits;
 
 pub(crate) use error::Result;

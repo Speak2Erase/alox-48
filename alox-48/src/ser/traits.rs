@@ -24,12 +24,12 @@ pub trait Serialize {
         S: Serializer;
 }
 
-pub trait Serializer {
+pub trait Serializer: Sized {
     type Ok;
 
-    type SerializeIvars: SerializeIvars;
-    type SerializeHash: SerializeHash;
-    type SerializeArray: SerializeArray;
+    type SerializeIvars: SerializeIvars<Ok = Self::Ok>;
+    type SerializeHash: SerializeHash<Ok = Self::Ok>;
+    type SerializeArray: SerializeArray<Ok = Self::Ok>;
 
     fn serialize_nil(self) -> Result<Self::Ok>;
 
@@ -79,6 +79,51 @@ pub trait Serializer {
     fn serialize_data<V>(self, class: &Sym, value: &V) -> Result<Self::Ok>
     where
         V: Serialize + ?Sized;
+
+    // provided
+    fn serialize_rust_string(self, string: &str) -> Result<Self::Ok> {
+        struct StringSerialize<'a>(&'a str);
+        impl<'a> Serialize for StringSerialize<'a> {
+            fn serialize<S>(&self, serializer: S) -> Result<S::Ok>
+            where
+                S: Serializer,
+            {
+                serializer.serialize_string(self.0.as_bytes())
+            }
+        }
+        let mut fields = self.serialize_instance(&StringSerialize(string), 1)?;
+        fields.serialize_entry(Sym::new("E"), &true)?;
+        fields.end()
+    }
+
+    fn collect_array<I>(self, iter: I) -> Result<Self::Ok>
+    where
+        I: IntoIterator,
+        I::IntoIter: ExactSizeIterator,
+        I::Item: Serialize,
+    {
+        let iter = iter.into_iter();
+        let mut serialize_array = self.serialize_array(iter.len())?;
+        for item in iter {
+            serialize_array.serialize_element(&item)?;
+        }
+        serialize_array.end()
+    }
+
+    fn collect_hash<K, V, I>(self, iter: I) -> Result<Self::Ok>
+    where
+        I: IntoIterator<Item = (K, V)>,
+        I::IntoIter: ExactSizeIterator,
+        K: Serialize,
+        V: Serialize,
+    {
+        let iter = iter.into_iter();
+        let mut serialize_hash = self.serialize_hash(iter.len())?;
+        for (key, value) in iter {
+            serialize_hash.serialize_entry(&key, &value)?;
+        }
+        serialize_hash.end()
+    }
 }
 
 pub trait SerializeIvars {
