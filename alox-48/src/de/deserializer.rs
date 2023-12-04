@@ -22,14 +22,8 @@
 
 use std::collections::BTreeSet;
 
-use serde::de;
-use serde::de::MapAccess;
-use serde::de::SeqAccess;
-use serde::forward_to_deserialize_any;
-use serde::Deserialize;
-
-use super::{Error, Kind, Result};
-use crate::tag::Tag;
+use super::{ignored::Ignored, Error, Kind, Result};
+use crate::{tag::Tag, Deserialize, DeserializerTrait, Sym, Visitor};
 
 /// The alox-48 deserializer.
 #[derive(Debug, Clone)]
@@ -40,13 +34,38 @@ pub struct Deserializer<'de> {
     stack: Vec<usize>,
     blacklisted_objects: BTreeSet<usize>,
 
-    sym_table: Vec<&'de str>,
+    sym_table: Vec<&'de Sym>,
 }
 
 #[derive(Debug, Clone)]
 struct Cursor<'de> {
     input: &'de [u8],
     position: usize,
+}
+
+struct InstanceAccess<'de, 'a> {
+    deserializer: &'a mut Deserializer<'de>,
+    // used to track undeserialized data
+    len: &'a mut usize,
+    index: &'a mut usize,
+}
+
+struct IvarAccess<'de, 'a> {
+    deserializer: &'a mut Deserializer<'de>,
+    len: usize,
+    index: &'a mut usize,
+}
+
+struct ArrayAccess<'de, 'a> {
+    deserializer: &'a mut Deserializer<'de>,
+    len: usize,
+    index: &'a mut usize,
+}
+
+struct HashAccess<'de, 'a> {
+    deserializer: &'a mut Deserializer<'de>,
+    len: usize,
+    index: &'a mut usize,
 }
 
 impl<'de> Cursor<'de> {
@@ -94,15 +113,6 @@ impl<'de> Cursor<'de> {
         self.position += length;
         Ok(ret)
     }
-}
-
-macro_rules! deserialize_len {
-    ($this:expr) => {{
-        let raw_length = $this.read_packed_int()?;
-        raw_length.try_into().map_err(|_| Error {
-            kind: Kind::UnexpectedNegativeLength(raw_length),
-        })?
-    }};
 }
 
 impl<'de> Deserializer<'de> {
@@ -178,8 +188,7 @@ impl<'de> Deserializer<'de> {
 
     #[allow(clippy::panic_in_result_fn)]
     fn read_float(&mut self) -> Result<f64> {
-        let length = deserialize_len!(self);
-        let out = self.cursor.next_bytes_dyn(length)?;
+        let out = self.read_bytes_len()?;
 
         if let Some(terminator_idx) = out.iter().position(|v| *v == 0) {
             let (str, [0, mantissa @ ..]) = out.split_at(terminator_idx) else {
@@ -209,9 +218,8 @@ impl<'de> Deserializer<'de> {
         }
     }
 
-    fn read_symbol(&mut self) -> Result<&'de str> {
-        let length = deserialize_len!(self);
-        let out = self.cursor.next_bytes_dyn(length)?;
+    fn read_symbol(&mut self) -> Result<&'de Sym> {
+        let out = self.read_bytes_len()?;
 
         let str = match std::str::from_utf8(out) {
             Ok(a) => a,
@@ -221,14 +229,15 @@ impl<'de> Deserializer<'de> {
                 });
             }
         };
+        let sym = Sym::new(str);
 
         if self.stack.is_empty() {
-            self.sym_table.push(str);
+            self.sym_table.push(sym);
         }
-        Ok(str)
+        Ok(sym)
     }
 
-    fn read_symlink(&mut self) -> Result<&'de str> {
+    fn read_symlink(&mut self) -> Result<&'de Sym> {
         let index = self.read_packed_int()? as usize;
 
         self.sym_table.get(index).copied().ok_or(Error {
@@ -237,7 +246,7 @@ impl<'de> Deserializer<'de> {
     }
 
     // FIXME: FIND BETTER NAME
-    fn read_symbol_either(&mut self) -> Result<&'de str> {
+    fn read_symbol_either(&mut self) -> Result<&'de Sym> {
         match self.cursor.next_tag()? {
             Tag::Symbol => self.read_symbol(),
             Tag::Symlink => self.read_symlink(),
@@ -257,5 +266,316 @@ impl<'de> Deserializer<'de> {
             return;
         }
         self.objtable.push(self.cursor.position);
+    }
+
+    fn read_usize(&mut self) -> Result<usize> {
+        let raw_length = self.read_packed_int()?;
+        usize::try_from(raw_length).map_err(|_| Error {
+            kind: Kind::UnexpectedNegativeLength(raw_length),
+        })
+    }
+
+    fn read_bytes_len(&mut self) -> Result<&'de [u8]> {
+        let len = self.read_usize()?;
+        self.cursor.next_bytes_dyn(len)
+    }
+}
+
+impl<'de, 'a> super::DeserializerTrait<'de> for &'a mut Deserializer<'de> {
+    // This is just barely over the limit.
+    // It's fine, I swear.
+    #[allow(clippy::too_many_lines)]
+    fn deserialize<V>(self, visitor: V) -> Result<V::Value>
+    where
+        V: Visitor<'de>,
+    {
+        if self.cursor.peek_tag()?.is_object_link_referenceable() {
+            self.register_obj();
+        }
+
+        match self.cursor.next_tag()? {
+            Tag::Nil => visitor.visit_nil(),
+            Tag::True => visitor.visit_bool(true),
+            Tag::False => visitor.visit_bool(false),
+            Tag::Integer => visitor.visit_i32(self.read_packed_int()?),
+            Tag::Float => visitor.visit_f64(self.read_float()?),
+            Tag::String => {
+                let data = self.read_bytes_len()?;
+                visitor.visit_string(data)
+            }
+            Tag::Array => {
+                let len = self.read_usize()?;
+                let mut index = 0;
+
+                let result = visitor.visit_array(ArrayAccess {
+                    deserializer: self,
+                    len,
+                    index: &mut index,
+                })?;
+
+                // Deserialize remaining elements that weren't deserialized
+                while index < len {
+                    index += 1;
+                    Ignored::deserialize(&mut *self)?;
+                }
+
+                Ok(result)
+            }
+            Tag::Hash => {
+                let len = self.read_usize()?;
+                let mut index = 0;
+
+                let result = visitor.visit_hash(HashAccess {
+                    deserializer: self,
+                    len,
+                    index: &mut index,
+                })?;
+
+                // Deserialize remaining elements that weren't deserialized
+                while index < len {
+                    index += 1;
+                    // Key
+                    Ignored::deserialize(&mut *self)?;
+                    // Value
+                    Ignored::deserialize(&mut *self)?;
+                }
+
+                Ok(result)
+            }
+            Tag::Symbol => visitor.visit_symbol(self.read_symbol()?),
+            Tag::Symlink => visitor.visit_symbol(self.read_symlink()?),
+            // Instance genuinely baffles me.
+            Tag::Instance => {
+                let mut len = 0;
+                let mut index = 0;
+
+                let result = visitor.visit_instance(&mut InstanceAccess {
+                    deserializer: &mut *self,
+                    len: &mut len,
+                    index: &mut index,
+                })?;
+
+                while index < len {
+                    index += 1;
+                    // Ivar
+                    self.read_symbol_either()?;
+                    // Value
+                    Ignored::deserialize(&mut *self)?;
+                }
+
+                Ok(result)
+            }
+            Tag::Object => {
+                let class = self.read_symbol_either()?;
+
+                let len = self.read_usize()?;
+                let mut index = 0;
+
+                let result = visitor.visit_object(
+                    class,
+                    IvarAccess {
+                        deserializer: self,
+                        len,
+                        index: &mut index,
+                    },
+                )?;
+
+                // Deserialize remaining elements that weren't deserialized
+                while index < len {
+                    index += 1;
+                    // Ivar
+                    self.read_symbol_either()?;
+                    // Value
+                    Ignored::deserialize(&mut *self)?;
+                }
+
+                Ok(result)
+            }
+            Tag::ObjectLink => {
+                let index = self.read_usize()?;
+
+                let jump_target = self.objtable.get(index).copied().ok_or(Error {
+                    kind: Kind::UnresolvedObjectlink(index),
+                })?;
+
+                self.stack.push(self.cursor.position);
+                self.cursor.seek(jump_target);
+
+                let result = self.deserialize(visitor);
+
+                self.cursor
+                    .seek(self.stack.pop().expect("stack should not empty"));
+
+                result
+            }
+            Tag::UserDef => {
+                let class = self.read_symbol_either()?;
+                let data = self.read_bytes_len()?;
+
+                visitor.visit_user_data(class, data)
+            }
+            // FIXME: this ignores default hash values. we should fix this?
+            Tag::HashDefault => {
+                let len = self.read_packed_int()? as _;
+                let mut index = 0;
+
+                let result = visitor.visit_hash(HashAccess {
+                    deserializer: self,
+                    len,
+                    index: &mut index,
+                });
+
+                // Deserialize remaining elements that weren't deserialized
+                while index < len {
+                    index += 1;
+                    // Key
+                    Ignored::deserialize(&mut *self)?;
+                    // Value
+                    Ignored::deserialize(&mut *self)?;
+                }
+
+                // Ignore the default value.
+                // This should work.
+                // Probably.
+                // :)
+                Ignored::deserialize(&mut *self)?;
+
+                result
+            }
+            Tag::UserClass => {
+                let class = self.read_symbol_either()?;
+                visitor.visit_user_class(class, &mut *self)
+            }
+            Tag::RawRegexp => {
+                let regex = self.read_bytes_len()?;
+                let flags = self.cursor.next_byte()?;
+                visitor.visit_regular_expression(regex, flags)
+            }
+            Tag::ClassRef => {
+                let class = self.read_symbol_either()?;
+                visitor.visit_class(class)
+            }
+            Tag::ModuleRef => {
+                let module = self.read_symbol_either()?;
+                visitor.visit_module(module)
+            }
+            // the ruby docs are wrong about this actually!
+            // they say the object comes first, then the module, but actually it's the other way around.
+            Tag::Extended => {
+                let module = self.read_symbol_either()?;
+                visitor.visit_extended(module, &mut *self)
+            }
+            Tag::UserMarshal => {
+                let class = self.read_symbol_either()?;
+                visitor.visit_user_class(class, &mut *self)
+            }
+            Tag::Struct => {
+                let len = self.read_packed_int()? as _;
+                let mut index = 0;
+
+                let name = self.read_symbol_either()?;
+                let result = visitor.visit_struct(
+                    name,
+                    IvarAccess {
+                        deserializer: self,
+                        len,
+                        index: &mut index,
+                    },
+                )?;
+
+                // Deserialize remaining elements that weren't deserialized
+                while index < len {
+                    index += 1;
+                    // Member
+                    self.read_symbol_either()?;
+                    // Value
+                    Ignored::deserialize(&mut *self)?;
+                }
+
+                Ok(result)
+            }
+            // I'm not sure why this exists. The ruby marshal doc mentions that it's for types from C extensions,
+            // But Data is functionally identical to UserMarshal.
+            Tag::Data => {
+                let class = self.read_symbol_either()?;
+                visitor.visit_data(class, &mut *self)
+            }
+        }
+    }
+}
+
+impl<'de, 'a> super::InstanceAccess<'de> for InstanceAccess<'de, 'a> {
+    type IvarAccess = IvarAccess<'de, 'a>;
+
+    fn value<V>(mut self, visitor: V) -> Result<(V::Value, Self::IvarAccess)>
+    where
+        V: Visitor<'de>,
+    {
+        let result = self.deserializer.deserialize(visitor)?;
+
+        let len = self.deserializer.read_usize()?;
+        *self.len = len;
+
+        Ok((
+            result,
+            IvarAccess {
+                deserializer: &mut *self.deserializer,
+                len,
+                index: self.index,
+            },
+        ))
+    }
+}
+
+impl<'de, 'a> super::IvarAccess<'de> for IvarAccess<'de, 'a> {
+    fn next_ivar(&mut self) -> Result<Option<&'de Sym>> {
+        if *self.index >= self.len {
+            return Ok(None);
+        }
+        *self.index += 1;
+
+        self.deserializer.read_symbol_either().map(Some)
+    }
+
+    fn next_value<T>(&mut self) -> Result<T>
+    where
+        T: Deserialize<'de>,
+    {
+        T::deserialize(&mut *self.deserializer)
+    }
+}
+
+impl<'de, 'a> super::ArrayAccess<'de> for ArrayAccess<'de, 'a> {
+    fn next_element<T>(&mut self) -> Result<Option<T>>
+    where
+        T: Deserialize<'de>,
+    {
+        if *self.index >= self.len {
+            return Ok(None);
+        }
+        *self.index += 1;
+
+        T::deserialize(&mut *self.deserializer).map(Some)
+    }
+}
+
+impl<'de, 'a> super::HashAccess<'de> for HashAccess<'de, 'a> {
+    fn next_key<K>(&mut self) -> Result<Option<K>>
+    where
+        K: Deserialize<'de>,
+    {
+        if *self.index >= self.len {
+            return Ok(None);
+        }
+        *self.index += 1;
+
+        K::deserialize(&mut *self.deserializer).map(Some)
+    }
+
+    fn next_value<V>(&mut self) -> Result<V>
+    where
+        V: Deserialize<'de>,
+    {
+        V::deserialize(&mut *self.deserializer)
     }
 }

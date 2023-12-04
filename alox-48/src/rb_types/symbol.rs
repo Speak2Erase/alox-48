@@ -50,6 +50,14 @@ impl Symbol {
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
+
+    pub fn is_ivar(&self) -> bool {
+        self.0.starts_with('@')
+    }
+
+    pub fn as_rust_field_name(&self) -> Option<&Sym> {
+        self.0.strip_prefix('@').map(Sym::new)
+    }
 }
 
 impl From<String> for Symbol {

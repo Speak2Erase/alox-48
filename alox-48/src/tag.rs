@@ -62,6 +62,8 @@ pub enum Tag {
     Extended = b'e',
 
     UserMarshal = b'U',
+
+    Data = b'd',
 }
 
 impl Tag {
@@ -89,8 +91,22 @@ impl Tag {
             b'C' => Some(Tag::UserClass),
             b'e' => Some(Tag::Extended),
             b'U' => Some(Tag::UserMarshal),
+            b'd' => Some(Tag::Data),
             _ => None,
         }
+    }
+
+    pub fn is_object_link_referenceable(&self) -> bool {
+        !matches!(
+            self,
+            Self::Nil
+                | Self::True
+                | Self::False
+                | Self::Integer
+                | Self::Symbol
+                | Self::Symlink
+                | Self::ObjectLink
+        )
     }
 }
 

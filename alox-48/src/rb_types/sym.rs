@@ -40,6 +40,10 @@ impl Sym {
     pub fn is_ivar(&self) -> bool {
         self.0.starts_with('@')
     }
+
+    pub fn to_rust_field_name(&self) -> Option<&Self> {
+        self.0.strip_prefix('@').map(Self::new)
+    }
 }
 
 impl AsRef<str> for Sym {
@@ -104,7 +108,7 @@ impl PartialEq<Symbol> for &Sym {
     }
 }
 
-impl PartialEq<Sym> for &Sym {
+impl PartialEq<Sym> for Sym {
     fn eq(&self, other: &Sym) -> bool {
         self.0.eq(&other.0)
     }

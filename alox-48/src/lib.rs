@@ -74,9 +74,12 @@ pub mod ser;
 pub mod value;
 
 pub mod rb_types;
-pub use rb_types::{Object, RbArray, RbHash, RbString, Symbol, Userdata};
+pub use rb_types::{Object, RbArray, RbHash, RbString, Sym, Symbol, Userdata};
 
-pub use de::{Deserializer, Error as DeError};
+pub use de::{
+    ArrayAccess, Deserialize, Deserializer, DeserializerTrait, Error as DeError, HashAccess,
+    IvarAccess, Visitor,
+};
 pub use ser::{Error as SerError, Serializer};
 pub use value::{from_value, to_value, Value};
 
@@ -85,7 +88,7 @@ pub use value::{from_value, to_value, Value};
 #[allow(clippy::missing_errors_doc)]
 pub fn from_bytes<'de, T>(data: &'de [u8]) -> Result<T, DeError>
 where
-    T: serde::Deserialize<'de>,
+    T: Deserialize<'de>,
 {
     let mut deserializer = Deserializer::new(data)?;
     T::deserialize(&mut deserializer)

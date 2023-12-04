@@ -18,7 +18,7 @@
 
 use std::str::Utf8Error;
 
-use crate::tag::Tag;
+use crate::{tag::Tag, Sym, Visitor};
 
 /// Type alias around a result.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -83,18 +83,141 @@ pub enum Kind {
     /// Version mismatch.
     #[error("Version error, expected [4, 8], got {0:?}")]
     VersionError([u8; 2]),
-    /// A custom error thrown by serde.
+    /// A custom error thrown by a visitor.
     #[error("Serde error: {0}")]
     Message(String),
 }
 
-impl serde::de::Error for Error {
-    fn custom<T>(msg: T) -> Self
-    where
-        T: std::fmt::Display,
-    {
-        Error {
-            kind: Kind::Message(msg.to_string()),
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum Unexpected<'a> {
+    Nil,
+    Bool(bool),
+    Integer(i32),
+    Float(f64),
+    Hash,
+    Array,
+    String(&'a [u8]),
+    Symbol(&'a Sym),
+    Regex(&'a [u8]),
+    Object(&'a Sym),
+    Struct(&'a Sym),
+    Class(&'a Sym),
+    Module(&'a Sym),
+    Instance,
+    Extended(&'a Sym),
+    UserClass(&'a Sym),
+    UserData(&'a Sym),
+    UserMarshal(&'a Sym),
+    Data(&'a Sym),
+}
+
+pub trait Expected {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result;
+}
+
+impl Expected for &str {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self)
+    }
+}
+
+impl<'de, T> Expected for T
+where
+    T: Visitor<'de>,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.expecting(f)
+    }
+}
+
+impl std::fmt::Display for dyn Expected {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Expected::fmt(self, f)
+    }
+}
+
+impl<'a> std::fmt::Display for Unexpected<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Unexpected::Nil => f.write_str("nil"),
+            Unexpected::Bool(v) => write!(f, "bool `{v}`"),
+            Unexpected::Integer(v) => write!(f, "integer `{v}`"),
+            Unexpected::Float(v) => write!(f, "float `{v}`"),
+            Unexpected::Hash => write!(f, "hash"),
+            Unexpected::Array => write!(f, "array"),
+            Unexpected::String(s) => {
+                let s = String::from_utf8_lossy(s);
+                write!(f, "string {s:?}")
+            }
+            Unexpected::Symbol(s) => write!(f, "symbol `{s}`"),
+            Unexpected::Regex(r) => {
+                let r = String::from_utf8_lossy(r);
+                write!(f, "string {r:?}")
+            }
+            Unexpected::Object(c) => write!(f, "an instance of `{c}`"),
+            Unexpected::Struct(n) => write!(f, "a struct of `{n}`"),
+            Unexpected::Class(c) => write!(f, "class `{c}`"),
+            Unexpected::Module(m) => write!(f, "module `{m}`"),
+            Unexpected::Instance => write!(f, "object with ivars"),
+            Unexpected::Extended(m) => write!(f, "extended object `{m}`"),
+            Unexpected::UserClass(c) => write!(f, "user class object `{c}`"),
+            Unexpected::UserData(c) => write!(f, "user data object `{c}`"),
+            Unexpected::UserMarshal(c) => write!(f, "user marshal object `{c}`"),
+            Unexpected::Data(c) => write!(f, "c data object `{c}`"),
         }
+    }
+}
+
+impl Error {
+    pub fn custom(str: String) -> Self {
+        Error {
+            kind: Kind::Message(str),
+        }
+    }
+
+    fn invalid_type(unexpected: Unexpected<'_>, exp: &dyn Expected) -> Self {
+        Self::custom(format!("invalid type: {unexpected}, expected `{exp}`"))
+    }
+
+    pub fn invalid_value(unexpected: Unexpected<'_>, exp: &dyn Expected) -> Self {
+        Self::custom(format!("invalid value: {unexpected}, expected `{exp}`"))
+    }
+
+    pub fn invalid_length(len: usize, exp: &dyn Expected) -> Self {
+        Self::custom(format!("invalid length: {len}, expected `{exp}`"))
+    }
+
+    pub fn unknown_field(field: &Sym, expected: &[&Sym]) -> Self {
+        struct OneOf<'a> {
+            expected: &'a [&'a Sym],
+        }
+        impl<'a> std::fmt::Display for OneOf<'a> {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                match self.expected {
+                    [] => write!(f, "there should be none"),
+                    [exp] => write!(f, "expected `{exp}`"),
+                    [exp1, exp2] => write!(f, "expected `{exp1}` or `{exp2}`"),
+                    exp => {
+                        for (i, exp) in exp.iter().enumerate() {
+                            if i > 0 {
+                                write!(f, ", ");
+                            }
+                            write!(f, "`{exp}`")?;
+                        }
+                        Ok(())
+                    }
+                }
+            }
+        }
+
+        Self::custom(format!("unknown field {field}, {}", OneOf { expected }))
+    }
+
+    pub fn missing_field(field: &Sym) -> Self {
+        Self::custom(format!("missing field `{field}`"))
+    }
+
+    pub fn duplicate_field(field: &Sym) -> Self {
+        Self::custom(format!("duplicate field `{field}`"))
     }
 }

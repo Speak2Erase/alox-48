@@ -25,6 +25,7 @@ mod userdata;
 
 pub use object::Object;
 pub use rb_string::RbString;
+pub use sym::Sym;
 pub use symbol::Symbol;
 pub use userdata::Userdata;
 
