@@ -43,7 +43,7 @@ pub enum Value {
     /// A float value.
     Float(f64),
     /// An integer value.
-    Integer(i64),
+    Integer(i32),
     /// A ruby string.
     /// Because strings in ruby are not guarenteed to be utf8, [`RbString`] stores a [`Vec<u8>`] instead.
     ///

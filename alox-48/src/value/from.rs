@@ -92,8 +92,8 @@ impl From<f64> for Value {
     }
 }
 
-impl From<i64> for Value {
-    fn from(value: i64) -> Self {
+impl From<i32> for Value {
+    fn from(value: i32) -> Self {
         Self::Integer(value)
     }
 }
@@ -130,10 +130,10 @@ impl TryInto<RbString> for Value {
     }
 }
 
-impl TryInto<i64> for Value {
+impl TryInto<i32> for Value {
     type Error = Self;
 
-    fn try_into(self) -> Result<i64, Self::Error> {
+    fn try_into(self) -> Result<i32, Self::Error> {
         self.into_integer()
     }
 }

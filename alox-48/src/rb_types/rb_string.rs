@@ -17,8 +17,8 @@
 use super::RbFields;
 
 use crate::{
-    de::Result as DeResult, ser::Result as SerResult, Deserialize, DeserializerTrait, Serialize,
-    SerializerTrait, Visitor,
+    de::Result as DeResult, ser::Result as SerResult, Deserialize, DeserializerTrait, IvarAccess,
+    Serialize, SerializeIvars, SerializerTrait, Visitor,
 };
 
 /// A type equivalent to ruby's `String`.
@@ -163,11 +163,49 @@ impl From<Vec<u8>> for RbString {
 
 struct StringVisitor;
 
+struct BytesVisitor;
+
+impl<'de> Visitor<'de> for BytesVisitor {
+    type Value = &'de [u8];
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("a ruby string")
+    }
+
+    fn visit_string(self, string: &'de [u8]) -> DeResult<Self::Value> {
+        Ok(string)
+    }
+}
+
 impl<'de> Visitor<'de> for StringVisitor {
     type Value = RbString;
 
     fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter.write_str("a ruby string")
+    }
+
+    fn visit_string(self, string: &'de [u8]) -> DeResult<Self::Value> {
+        Ok(RbString {
+            data: string.to_vec(),
+            fields: RbFields::new(),
+        })
+    }
+
+    fn visit_instance<A>(self, instance: A) -> DeResult<Self::Value>
+    where
+        A: crate::de::InstanceAccess<'de>,
+    {
+        let (data, mut ivar) = instance.value(BytesVisitor)?;
+
+        let mut fields = RbFields::with_capacity(ivar.len());
+        while let Some((k, v)) = ivar.next_entry()? {
+            fields.insert(k.to_symbol(), v);
+        }
+
+        Ok(RbString {
+            data: data.to_vec(),
+            fields,
+        })
     }
 }
 
@@ -180,11 +218,32 @@ impl<'de> Deserialize<'de> for RbString {
     }
 }
 
+struct SerializeBytes<'a>(&'a [u8]);
+
+impl<'a> Serialize for SerializeBytes<'a> {
+    fn serialize<S>(&self, serializer: S) -> SerResult<S::Ok>
+    where
+        S: SerializerTrait,
+    {
+        serializer.serialize_string(self.0)
+    }
+}
+
 impl Serialize for RbString {
     fn serialize<S>(&self, serializer: S) -> SerResult<S::Ok>
     where
         S: SerializerTrait,
     {
-        todo!()
+        if self.fields.is_empty() {
+            serializer.serialize_string(&self.data)
+        } else {
+            // if we just passed the data as is it'd be serialized as a byte array!
+            let mut ivars =
+                serializer.serialize_instance(&SerializeBytes(&self.data), self.fields.len())?;
+            for (k, v) in &self.fields {
+                ivars.serialize_entry(k, v)?;
+            }
+            ivars.end()
+        }
     }
 }

@@ -17,8 +17,8 @@
 use super::{RbFields, Symbol};
 
 use crate::{
-    de::Result as DeResult, ser::Result as SerResult, Deserialize, DeserializerTrait, Serialize,
-    SerializerTrait, Visitor,
+    de::Result as DeResult, ser::Result as SerResult, Deserialize, DeserializerTrait, IvarAccess,
+    Serialize, SerializeIvars, SerializerTrait, Sym, Visitor,
 };
 
 /// A type equivalent to ruby's `Object`.
@@ -58,6 +58,20 @@ impl<'de> Visitor<'de> for ObjectVisitor {
     fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter.write_str("an object")
     }
+
+    fn visit_object<A>(self, class: &'de Sym, mut instance_variables: A) -> DeResult<Self::Value>
+    where
+        A: IvarAccess<'de>,
+    {
+        let class = class.to_symbol();
+        let mut fields = RbFields::with_capacity(instance_variables.len());
+
+        while let Some((k, v)) = instance_variables.next_entry()? {
+            fields.insert(k.to_symbol(), v);
+        }
+
+        Ok(Object { class, fields })
+    }
 }
 
 impl<'de> Deserialize<'de> for Object {
@@ -74,6 +88,10 @@ impl Serialize for Object {
     where
         S: SerializerTrait,
     {
-        todo!()
+        let mut ivars = serializer.serialize_object(&self.class, self.fields.len())?;
+        for (k, v) in &self.fields {
+            ivars.serialize_entry(k, v)?;
+        }
+        ivars.end()
     }
 }

@@ -403,6 +403,7 @@ impl<'a> super::SerializeArray for SerializeArray<'a> {
     where
         T: crate::Serialize + ?Sized,
     {
+        self.index += 1;
         v.serialize(&mut *self.serializer)
     }
 
