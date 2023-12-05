@@ -15,7 +15,12 @@
 // You should have received a copy of the GNU General Public License
 // along with alox-48.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::Symbol;
+use std::borrow::Borrow;
+
+use crate::{
+    de::Result as DeResult, ser::Result as SerResult, Deserialize, DeserializerTrait, Serialize,
+    SerializerTrait, Symbol, Visitor,
+};
 
 #[repr(transparent)]
 pub struct Sym(pub(crate) str);
@@ -51,6 +56,18 @@ impl Sym {
 
     pub fn len(&self) -> usize {
         self.0.len()
+    }
+}
+
+impl Borrow<str> for Sym {
+    fn borrow(&self) -> &str {
+        &self.0
+    }
+}
+
+impl Borrow<[u8]> for Sym {
+    fn borrow(&self) -> &[u8] {
+        self.0.as_bytes()
     }
 }
 
@@ -94,7 +111,7 @@ impl std::fmt::Debug for Sym {
 
 impl std::hash::Hash for Sym {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.0.hash(state)
+        self.0.hash(state);
     }
 }
 
@@ -135,3 +152,36 @@ impl PartialEq<Sym> for Sym {
 }
 
 impl Eq for Sym {}
+
+struct SymVisitor;
+
+impl<'de> Visitor<'de> for SymVisitor {
+    type Value = &'de Sym;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("a symbol")
+    }
+
+    fn visit_symbol(self, symbol: &'de Sym) -> DeResult<Self::Value> {
+        // its that easy
+        Ok(symbol)
+    }
+}
+
+impl<'de> Deserialize<'de> for &'de Sym {
+    fn deserialize<D>(deserializer: D) -> DeResult<Self>
+    where
+        D: DeserializerTrait<'de>,
+    {
+        deserializer.deserialize(SymVisitor)
+    }
+}
+
+impl Serialize for Sym {
+    fn serialize<S>(&self, serializer: S) -> SerResult<S::Ok>
+    where
+        S: SerializerTrait,
+    {
+        serializer.serialize_symbol(self)
+    }
+}

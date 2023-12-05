@@ -16,6 +16,11 @@
 // along with alox-48.  If not, see <http://www.gnu.org/licenses/>.
 use super::{RbFields, Symbol};
 
+use crate::{
+    de::Result as DeResult, ser::Result as SerResult, Deserialize, DeserializerTrait, Serialize,
+    SerializerTrait, Visitor,
+};
+
 /// A type equivalent to ruby's `Object`.
 #[derive(PartialEq, Eq, Default, Debug, Clone)]
 pub struct Object {
@@ -42,5 +47,33 @@ impl std::hash::Hash for Object {
             var.hash(state);
             field.hash(state);
         }
+    }
+}
+
+struct ObjectVisitor;
+
+impl<'de> Visitor<'de> for ObjectVisitor {
+    type Value = Object;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("an object")
+    }
+}
+
+impl<'de> Deserialize<'de> for Object {
+    fn deserialize<D>(deserializer: D) -> DeResult<Self>
+    where
+        D: DeserializerTrait<'de>,
+    {
+        deserializer.deserialize(ObjectVisitor)
+    }
+}
+
+impl Serialize for Object {
+    fn serialize<S>(&self, serializer: S) -> SerResult<S::Ok>
+    where
+        S: SerializerTrait,
+    {
+        todo!()
     }
 }

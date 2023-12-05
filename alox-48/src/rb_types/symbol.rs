@@ -17,13 +17,16 @@
 
 use std::borrow::Borrow;
 
-use super::sym::Sym;
+use crate::{
+    de::Result as DeResult, ser::Result as SerResult, Deserialize, DeserializerTrait, Serialize,
+    SerializerTrait, Sym, Visitor,
+};
 
 /// A symbol from ruby.
 /// It's a newtype around a String, meant to preserve types during (de)serialization.
 ///
 /// When serializing, a [`String`] will be serialized as a String, but a [`Symbol`] will be serialized as a Symbol.
-#[derive(Hash, Eq, Default, Clone)]
+#[derive(Eq, Default, Clone)]
 pub struct Symbol(pub(crate) String);
 
 #[allow(clippy::must_use_candidate)]
@@ -120,6 +123,12 @@ impl PartialEq<Sym> for Symbol {
     }
 }
 
+impl std::hash::Hash for Symbol {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+}
+
 impl Borrow<str> for Symbol {
     fn borrow(&self) -> &str {
         &self.0
@@ -153,5 +162,45 @@ impl AsRef<Sym> for Symbol {
 impl From<&Sym> for Symbol {
     fn from(value: &Sym) -> Self {
         value.to_owned()
+    }
+}
+
+impl std::ops::Deref for Symbol {
+    type Target = Sym;
+
+    fn deref(&self) -> &Self::Target {
+        Sym::new(&self.0)
+    }
+}
+
+struct SymbolVisitor;
+
+impl<'de> Visitor<'de> for SymbolVisitor {
+    type Value = Symbol;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("a symbol")
+    }
+
+    fn visit_symbol(self, symbol: &'de Sym) -> DeResult<Self::Value> {
+        Ok(symbol.to_symbol())
+    }
+}
+
+impl<'de> Deserialize<'de> for Symbol {
+    fn deserialize<D>(deserializer: D) -> DeResult<Self>
+    where
+        D: DeserializerTrait<'de>,
+    {
+        deserializer.deserialize(SymbolVisitor)
+    }
+}
+
+impl Serialize for Symbol {
+    fn serialize<S>(&self, serializer: S) -> SerResult<S::Ok>
+    where
+        S: SerializerTrait,
+    {
+        serializer.serialize_symbol(self.as_sym())
     }
 }

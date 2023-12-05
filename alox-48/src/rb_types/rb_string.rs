@@ -16,6 +16,11 @@
 // along with alox-48.  If not, see <http://www.gnu.org/licenses/>.
 use super::RbFields;
 
+use crate::{
+    de::Result as DeResult, ser::Result as SerResult, Deserialize, DeserializerTrait, Serialize,
+    SerializerTrait, Visitor,
+};
+
 /// A type equivalent to ruby's `String`.
 /// ruby strings do not have to be utf8 encoded, so this type uses [`Vec<u8>`] instead.
 ///
@@ -153,5 +158,33 @@ impl From<Vec<u8>> for RbString {
             data: value,
             fields: indexmap::IndexMap::default(),
         }
+    }
+}
+
+struct StringVisitor;
+
+impl<'de> Visitor<'de> for StringVisitor {
+    type Value = RbString;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("a ruby string")
+    }
+}
+
+impl<'de> Deserialize<'de> for RbString {
+    fn deserialize<D>(deserializer: D) -> DeResult<Self>
+    where
+        D: DeserializerTrait<'de>,
+    {
+        deserializer.deserialize(StringVisitor)
+    }
+}
+
+impl Serialize for RbString {
+    fn serialize<S>(&self, serializer: S) -> SerResult<S::Ok>
+    where
+        S: SerializerTrait,
+    {
+        todo!()
     }
 }

@@ -224,6 +224,8 @@ array_impl!(<T> Serialize for BTreeSet<T> where T: Serialize + Ord);
 
 array_impl!(<T, H> Serialize for HashSet<T, H> where T: Serialize + Hash, H: BuildHasher + Default);
 
+array_impl!(<T, H> Serialize for indexmap::IndexSet<T, H> where T: Serialize + Hash, H: BuildHasher);
+
 // i despise you, linked list.
 array_impl!(<T> Serialize for LinkedList<T> where T: Serialize);
 
@@ -250,7 +252,9 @@ macro_rules! map_impl {
 
 map_impl!(<K, V> Serialize for BTreeMap<K, V> where K: Ord + Serialize, V: Serialize);
 
-map_impl!(<K, V> Serialize for HashMap<K, V> where K: Hash + Serialize, V: Serialize);
+map_impl!(<K, V, H> Serialize for HashMap<K, V, H> where K: Hash + Serialize, V: Serialize, H: BuildHasher);
+
+map_impl!(<K, V, H> Serialize for indexmap::IndexMap<K, V, H> where K: Hash + Serialize, V: Serialize, H: BuildHasher);
 
 macro_rules! deref_impl {
     (

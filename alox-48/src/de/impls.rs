@@ -15,14 +15,17 @@
 // You should have received a copy of the GNU General Public License
 // along with alox-48.  If not, see <http://www.gnu.org/licenses/>.
 
+use indexmap::{IndexMap, IndexSet};
+
 use std::{
-    collections::{BTreeSet, HashSet, LinkedList, VecDeque},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet, LinkedList, VecDeque},
     hash::{BuildHasher, Hash},
     marker::PhantomData,
 };
 
 use super::{
-    traits::VisitorOption, ArrayAccess, Deserialize, DeserializerTrait, Error, Result, Visitor,
+    traits::VisitorOption, ArrayAccess, Deserialize, DeserializerTrait, Error, HashAccess, Result,
+    Visitor,
 };
 use crate::Sym;
 
@@ -310,6 +313,13 @@ seq_impl!(
     VecDeque::push_back
 );
 
+seq_impl!(
+    IndexSet<T: Hash + Eq, H: BuildHasher + Default>,
+    array,
+    IndexSet::with_capacity_and_hasher(array.len(), H::default()),
+    IndexSet::insert
+);
+
 struct ArrayVisitor<T, const SIZE: usize> {
     marker: PhantomData<[T; SIZE]>,
 }
@@ -389,3 +399,73 @@ where
         })
     }
 }
+
+macro_rules! map_impl {
+    (
+        $(#[$attr:meta])*
+        $ty:ident <K $(: $kbound1:ident $(+ $kbound2:ident)*)*, V $(, $typaram:ident : $bound1:ident $(+ $bound2:ident)*)*>,
+        $access:ident,
+        $with_capacity:expr
+    ) => {
+        $(#[$attr])*
+        impl<'de, K, V $(, $typaram)*> Deserialize<'de> for $ty<K, V $(, $typaram)*>
+        where
+            K: Deserialize<'de> $(+ $kbound1 $(+ $kbound2)*)*,
+            V: Deserialize<'de>,
+            $($typaram: $bound1 $(+ $bound2)*),*
+        {
+            fn deserialize<D>(deserializer: D) -> Result<Self>
+            where
+                D: DeserializerTrait<'de>,
+            {
+                struct MapVisitor<K, V $(, $typaram)*> {
+                    marker: PhantomData<$ty<K, V $(, $typaram)*>>,
+                }
+
+                impl<'de, K, V $(, $typaram)*> Visitor<'de> for MapVisitor<K, V $(, $typaram)*>
+                where
+                    K: Deserialize<'de> $(+ $kbound1 $(+ $kbound2)*)*,
+                    V: Deserialize<'de>,
+                    $($typaram: $bound1 $(+ $bound2)*),*
+                {
+                    type Value = $ty<K, V $(, $typaram)*>;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        formatter.write_str("a map")
+                    }
+
+                    #[inline]
+                    fn visit_hash<A>(self, mut $access: A) -> Result<Self::Value>
+                    where
+                        A: HashAccess<'de>,
+                    {
+                        let mut values = $with_capacity;
+
+                        while let Some((key, value)) = $access.next_entry()? {
+                            values.insert(key, value);
+                        }
+
+                        Ok(values)
+                    }
+                }
+
+                let visitor = MapVisitor { marker: PhantomData };
+                deserializer.deserialize(visitor)
+            }
+        }
+    }
+}
+
+map_impl!(BTreeMap<K: Ord, V>, map, BTreeMap::new());
+
+map_impl!(
+    HashMap<K: Eq + Hash, V, H: BuildHasher + Default>,
+    map,
+    HashMap::with_capacity_and_hasher(map.len(), H::default())
+);
+
+map_impl!(
+    IndexMap<K: Eq + Hash, V, H: BuildHasher + Default>,
+    map,
+    IndexMap::with_capacity_and_hasher(map.len(), H::default())
+);
