@@ -16,14 +16,13 @@
 // along with alox-48.  If not, see <http://www.gnu.org/licenses/>.
 use std::{
     cell::{Cell, RefCell},
-    collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap, HashSet, VecDeque},
+    collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap, HashSet, LinkedList, VecDeque},
     ffi::{CStr, CString},
-    hash::Hash,
+    hash::{BuildHasher, Hash},
     num::{
         NonZeroI128, NonZeroI16, NonZeroI32, NonZeroI64, NonZeroI8, NonZeroIsize, NonZeroU128,
         NonZeroU16, NonZeroU32, NonZeroU64, NonZeroU8, NonZeroUsize,
     },
-    path::{Path, PathBuf},
     sync::atomic::{
         AtomicBool, AtomicI16, AtomicI32, AtomicI64, AtomicI8, AtomicIsize, AtomicU16, AtomicU32,
         AtomicU64, AtomicU8, AtomicUsize, Ordering,
@@ -162,6 +161,15 @@ macro_rules! tuple_impls {
     }
 }
 
+impl Serialize for () {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok>
+    where
+        S: SerializerTrait,
+    {
+        serializer.serialize_nil()
+    }
+}
+
 // tuple pyramid! rust has no variadic generics so this is the best we can do :(
 tuple_impls! {
     1 => (0 T0)
@@ -214,7 +222,10 @@ array_impl!(<T> Serialize for BinaryHeap<T> where T: Serialize + Ord);
 
 array_impl!(<T> Serialize for BTreeSet<T> where T: Serialize + Ord);
 
-array_impl!(<T> Serialize for HashSet<T> where T: Serialize + Hash);
+array_impl!(<T, H> Serialize for HashSet<T, H> where T: Serialize + Hash, H: BuildHasher + Default);
+
+// i despise you, linked list.
+array_impl!(<T> Serialize for LinkedList<T> where T: Serialize);
 
 array_impl!(<T> Serialize for VecDeque<T> where T: Serialize);
 

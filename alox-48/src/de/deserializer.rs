@@ -506,6 +506,18 @@ impl<'de, 'a> super::DeserializerTrait<'de> for &'a mut Deserializer<'de> {
             }
         }
     }
+
+    fn deserialize_option<V>(self, visitor: V) -> Result<V::Value>
+    where
+        V: super::traits::VisitorOption<'de>,
+    {
+        if self.cursor.peek_tag()? == Tag::Nil {
+            self.cursor.next_byte()?;
+            visitor.visit_none()
+        } else {
+            visitor.visit_some(self)
+        }
+    }
 }
 
 impl<'de, 'a> super::InstanceAccess<'de> for &'a mut InstanceAccess<'de, 'a> {
@@ -547,6 +559,14 @@ impl<'de, 'a> super::IvarAccess<'de> for IvarAccess<'de, 'a> {
     {
         T::deserialize(&mut *self.deserializer)
     }
+
+    fn len(&self) -> usize {
+        self.len
+    }
+
+    fn index(&self) -> usize {
+        *self.index
+    }
 }
 
 impl<'de, 'a> super::ArrayAccess<'de> for ArrayAccess<'de, 'a> {
@@ -560,6 +580,14 @@ impl<'de, 'a> super::ArrayAccess<'de> for ArrayAccess<'de, 'a> {
         *self.index += 1;
 
         T::deserialize(&mut *self.deserializer).map(Some)
+    }
+
+    fn len(&self) -> usize {
+        self.len
+    }
+
+    fn index(&self) -> usize {
+        *self.index
     }
 }
 
@@ -581,5 +609,13 @@ impl<'de, 'a> super::HashAccess<'de> for HashAccess<'de, 'a> {
         V: Deserialize<'de>,
     {
         V::deserialize(&mut *self.deserializer)
+    }
+
+    fn len(&self) -> usize {
+        self.len
+    }
+
+    fn index(&self) -> usize {
+        *self.index
     }
 }

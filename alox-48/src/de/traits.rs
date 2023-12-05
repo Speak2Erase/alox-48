@@ -23,10 +23,14 @@ pub trait Deserialize<'de>: Sized {
         D: Deserializer<'de>;
 }
 
-pub trait Deserializer<'de> {
+pub trait Deserializer<'de>: Sized {
     fn deserialize<V>(self, visitor: V) -> Result<V::Value>
     where
         V: Visitor<'de>;
+
+    fn deserialize_option<V>(self, visitor: V) -> Result<V::Value>
+    where
+        V: VisitorOption<'de>;
 }
 
 pub trait Visitor<'de>: Sized {
@@ -133,6 +137,17 @@ pub trait Visitor<'de>: Sized {
     }
 }
 
+// todo investigate other ways of doing this
+pub trait VisitorOption<'de> {
+    type Value;
+
+    fn visit_none(self) -> Result<Self::Value>;
+
+    fn visit_some<D>(self, deserializer: D) -> Result<Self::Value>
+    where
+        D: Deserializer<'de>;
+}
+
 pub trait InstanceAccess<'de>: Sized {
     type IvarAccess: IvarAccess<'de>;
 
@@ -158,6 +173,10 @@ pub trait IvarAccess<'de> {
             Ok(None)
         }
     }
+
+    fn len(&self) -> usize;
+
+    fn index(&self) -> usize;
 }
 
 pub trait HashAccess<'de> {
@@ -180,12 +199,20 @@ pub trait HashAccess<'de> {
             Ok(None)
         }
     }
+
+    fn len(&self) -> usize;
+
+    fn index(&self) -> usize;
 }
 
 pub trait ArrayAccess<'de> {
     fn next_element<T>(&mut self) -> Result<Option<T>>
     where
         T: Deserialize<'de>;
+
+    fn len(&self) -> usize;
+
+    fn index(&self) -> usize;
 }
 
 impl<'de, 'a, A> IvarAccess<'de> for &'a mut A
@@ -208,6 +235,14 @@ where
         T: Deserialize<'de>,
     {
         (**self).next_entry()
+    }
+
+    fn len(&self) -> usize {
+        (*self).len()
+    }
+
+    fn index(&self) -> usize {
+        (*self).index()
     }
 }
 
@@ -236,6 +271,14 @@ where
     {
         (**self).next_entry()
     }
+
+    fn len(&self) -> usize {
+        (*self).len()
+    }
+
+    fn index(&self) -> usize {
+        (*self).index()
+    }
 }
 
 impl<'de, 'a, A> ArrayAccess<'de> for &'a mut A
@@ -247,5 +290,13 @@ where
         T: Deserialize<'de>,
     {
         (**self).next_element()
+    }
+
+    fn len(&self) -> usize {
+        (*self).len()
+    }
+
+    fn index(&self) -> usize {
+        (*self).index()
     }
 }

@@ -16,7 +16,7 @@
 // along with alox-48.  If not, see <http://www.gnu.org/licenses/>.
 #![allow(dead_code)]
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Tag {
     Nil = b'0',
