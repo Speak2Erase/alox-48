@@ -95,8 +95,7 @@ pub fn from_value<'de, T>(value: &'de Value) -> Result<T, crate::DeError>
 where
     T: crate::Deserialize<'de>,
 {
-    todo!()
-    // T::deserialize(value)
+    T::deserialize(value)
 }
 
 /// Convert a `T` into `alox_48::Value`.
@@ -131,6 +130,5 @@ pub fn to_value<T>(value: T) -> Result<Value, crate::SerError>
 where
     T: crate::Serialize,
 {
-    todo!()
-    // T::serialize(&value, ser::Serializer)
+    T::serialize(&value, ser::Serializer)
 }

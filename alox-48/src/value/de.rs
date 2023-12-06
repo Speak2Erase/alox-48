@@ -15,9 +15,8 @@
 // You should have received a copy of the GNU General Public License
 // along with alox-48.  If not, see <http://www.gnu.org/licenses/>.
 use crate::{
-    de::{InstanceAccess, Result},
-    ArrayAccess, Deserialize, DeserializerTrait, HashAccess, IvarAccess, Object, RbFields, RbHash,
-    RbString, Sym, Userdata, Value, Visitor,
+    de::Error, de::Result, ArrayAccess, Deserialize, DeserializerTrait, HashAccess, InstanceAccess,
+    IvarAccess, Object, RbFields, RbHash, RbString, Sym, Userdata, Value, Visitor, VisitorOption,
 };
 
 struct ValueVisitor;
@@ -120,5 +119,173 @@ impl<'de> Deserialize<'de> for Value {
         D: DeserializerTrait<'de>,
     {
         deserializer.deserialize(ValueVisitor)
+    }
+}
+
+enum ValueInstanceAccess<'de> {
+    String {
+        string: &'de [u8],
+        fields: &'de RbFields,
+    },
+}
+
+struct ValueIVarAccess<'de> {
+    fields: &'de RbFields,
+    index: usize,
+}
+
+struct ValueArrayAccess<'de> {
+    array: &'de [Value],
+    index: usize,
+}
+
+struct ValueHashAccess<'de> {
+    hash: &'de RbHash,
+    index: usize,
+}
+
+impl<'de> DeserializerTrait<'de> for &'de Value {
+    fn deserialize<V>(self, visitor: V) -> Result<V::Value>
+    where
+        V: Visitor<'de>,
+    {
+        match self {
+            Value::Nil => visitor.visit_nil(),
+            Value::Bool(v) => visitor.visit_bool(*v),
+            Value::Float(f) => visitor.visit_f64(*f),
+            Value::Integer(i) => visitor.visit_i32(*i),
+            Value::String(s) => {
+                if s.fields.is_empty() {
+                    visitor.visit_string(s.data.as_slice())
+                } else {
+                    visitor.visit_instance(ValueInstanceAccess::String {
+                        string: &s.data,
+                        fields: &s.fields,
+                    })
+                }
+            }
+            Value::Symbol(s) => visitor.visit_symbol(s),
+            Value::Array(array) => visitor.visit_array(ValueArrayAccess { array, index: 0 }),
+            Value::Hash(hash) => visitor.visit_hash(ValueHashAccess { hash, index: 0 }),
+            Value::Userdata(u) => visitor.visit_user_data(&u.class, &u.data),
+            Value::Object(o) => visitor.visit_object(
+                &o.class,
+                ValueIVarAccess {
+                    fields: &o.fields,
+                    index: 0,
+                },
+            ),
+        }
+    }
+
+    fn deserialize_option<V>(self, visitor: V) -> Result<V::Value>
+    where
+        V: VisitorOption<'de>,
+    {
+        if matches!(self, Value::Nil) {
+            visitor.visit_none()
+        } else {
+            visitor.visit_some(self)
+        }
+    }
+}
+
+impl<'de> InstanceAccess<'de> for ValueInstanceAccess<'de> {
+    type IvarAccess = ValueIVarAccess<'de>;
+
+    fn value<V>(self, visitor: V) -> Result<(V::Value, Self::IvarAccess)>
+    where
+        V: Visitor<'de>,
+    {
+        match self {
+            Self::String { string, fields } => {
+                let value = visitor.visit_string(string)?;
+                Ok((value, ValueIVarAccess { fields, index: 0 }))
+            }
+        }
+    }
+}
+
+impl<'de> IvarAccess<'de> for ValueIVarAccess<'de> {
+    fn next_ivar(&mut self) -> Result<Option<&'de Sym>> {
+        let Some((field, _)) = self.fields.get_index(self.index) else {
+            return Ok(None);
+        };
+        Ok(Some(field))
+    }
+
+    fn next_value<T>(&mut self) -> Result<T>
+    where
+        T: Deserialize<'de>,
+    {
+        let (_, value) = self
+            .fields
+            .get_index(self.index)
+            .ok_or_else(|| Error::custom("out of values".to_string()))?;
+        self.index += 1;
+
+        T::deserialize(value)
+    }
+
+    fn len(&self) -> usize {
+        self.fields.len()
+    }
+
+    fn index(&self) -> usize {
+        self.index
+    }
+}
+
+impl<'de> ArrayAccess<'de> for ValueArrayAccess<'de> {
+    fn next_element<T>(&mut self) -> Result<Option<T>>
+    where
+        T: Deserialize<'de>,
+    {
+        let Some(value) = self.array.get(self.index) else {
+            return Ok(None);
+        };
+        self.index += 1;
+        T::deserialize(value).map(Some)
+    }
+
+    fn len(&self) -> usize {
+        self.array.len()
+    }
+
+    fn index(&self) -> usize {
+        self.index
+    }
+}
+
+impl<'de> HashAccess<'de> for ValueHashAccess<'de> {
+    fn next_key<K>(&mut self) -> Result<Option<K>>
+    where
+        K: Deserialize<'de>,
+    {
+        let Some((key, _)) = self.hash.get_index(self.index) else {
+            return Ok(None);
+        };
+        K::deserialize(key).map(Some)
+    }
+
+    fn next_value<T>(&mut self) -> Result<T>
+    where
+        T: Deserialize<'de>,
+    {
+        let (_, value) = self
+            .hash
+            .get_index(self.index)
+            .ok_or_else(|| Error::custom("out of values".to_string()))?;
+        self.index += 1;
+
+        T::deserialize(value)
+    }
+
+    fn len(&self) -> usize {
+        self.hash.len()
+    }
+
+    fn index(&self) -> usize {
+        self.index
     }
 }

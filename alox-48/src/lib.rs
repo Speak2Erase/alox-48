@@ -78,7 +78,7 @@ pub use rb_types::{Object, RbArray, RbFields, RbHash, RbString, Sym, Symbol, Use
 
 pub use de::{
     ArrayAccess, Deserialize, Deserializer, DeserializerTrait, Error as DeError, HashAccess,
-    IvarAccess, Visitor,
+    InstanceAccess, IvarAccess, Visitor, VisitorOption,
 };
 pub use ser::{
     Error as SerError, Serialize, SerializeArray, SerializeHash, SerializeIvars, Serializer,
