@@ -17,7 +17,7 @@
 #![allow(clippy::cast_possible_wrap)]
 
 use indexmap::IndexSet;
-use serde::ser;
+
 
 use super::{Error, Kind, Result};
 use crate::{Sym, Symbol};

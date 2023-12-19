@@ -1,17 +1,14 @@
 #![allow(dead_code)]
 use std::{collections::HashMap, process::Command};
 
-use serde::Deserialize;
-
-#[derive(Debug, Deserialize)]
+#[derive(Debug, alox_48::Deserialize)]
 struct MyClass {
     test: Test,
     bool: bool,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, alox_48::Deserialize)]
 struct Test {
-    #[serde(alias = "@map")]
     map: HashMap<String, bool>,
 }
 

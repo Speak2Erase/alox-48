@@ -65,12 +65,6 @@ impl Borrow<str> for Sym {
     }
 }
 
-impl Borrow<[u8]> for Sym {
-    fn borrow(&self) -> &[u8] {
-        self.0.as_bytes()
-    }
-}
-
 impl AsRef<str> for Sym {
     fn as_ref(&self) -> &str {
         &self.0

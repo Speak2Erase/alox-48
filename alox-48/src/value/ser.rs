@@ -116,7 +116,7 @@ impl SerializerTrait for Serializer {
         Ok(Value::Symbol(sym.to_symbol()))
     }
 
-    fn serialize_regular_expression(self, regex: &[u8], flags: u8) -> Result<Self::Ok> {
+    fn serialize_regular_expression(self, _regex: &[u8], _flags: u8) -> Result<Self::Ok> {
         todo!()
     }
 
@@ -136,11 +136,11 @@ impl SerializerTrait for Serializer {
         })
     }
 
-    fn serialize_class(self, class: &Sym) -> Result<Self::Ok> {
+    fn serialize_class(self, _class: &Sym) -> Result<Self::Ok> {
         todo!()
     }
 
-    fn serialize_module(self, module: &Sym) -> Result<Self::Ok> {
+    fn serialize_module(self, _module: &Sym) -> Result<Self::Ok> {
         todo!()
     }
 
@@ -156,14 +156,14 @@ impl SerializerTrait for Serializer {
         })
     }
 
-    fn serialize_extended<V>(self, module: &Sym, value: &V) -> Result<Self::Ok>
+    fn serialize_extended<V>(self, _module: &Sym, _value: &V) -> Result<Self::Ok>
     where
         V: Serialize + ?Sized,
     {
         todo!()
     }
 
-    fn serialize_user_class<V>(self, class: &Sym, value: &V) -> Result<Self::Ok>
+    fn serialize_user_class<V>(self, _class: &Sym, _value: &V) -> Result<Self::Ok>
     where
         V: Serialize + ?Sized,
     {
@@ -177,14 +177,14 @@ impl SerializerTrait for Serializer {
         }))
     }
 
-    fn serialize_user_marshal<V>(self, class: &Sym, value: &V) -> Result<Self::Ok>
+    fn serialize_user_marshal<V>(self, _class: &Sym, _value: &V) -> Result<Self::Ok>
     where
         V: Serialize + ?Sized,
     {
         todo!()
     }
 
-    fn serialize_data<V>(self, class: &Sym, value: &V) -> Result<Self::Ok>
+    fn serialize_data<V>(self, _class: &Sym, _value: &V) -> Result<Self::Ok>
     where
         V: Serialize + ?Sized,
     {

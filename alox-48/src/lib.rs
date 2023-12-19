@@ -8,18 +8,15 @@
     clippy::panicking_unwrap,
     clippy::all
 )]
+#![allow(clippy::must_use_candidate, clippy::missing_errors_doc)]
 
 //! alox-48
 //! (short for aluminum oxide 48)
 //!
-//! alox-48 is a crate using serde designed to deserialize ruby marshal data.
-//! It uses the currently nightly feature `min_specialization` to extend serde's data model,
-//! preventing the loss of information in (de)serialization.
+//! alox-48 supports both full serialization and deserialization of Marshal, but generally users of this library will not be using
+//! most of Marshal's features. (Classes, Extended types, etc)
 //!
-//! alox-48 supports both serialization and deserialization,
-//! but some types present in rust's type system and ruby's marshal format are unsupported.
-//!
-//! Most notably, alox-48 does NOT support object links. Object links are marshal's way of saving space,
+//! However, alox-48 does NOT support object links. Object links are marshal's way of saving space,
 //! if an object was serialized already a "link" indicating when it was serialized is serialized instead.
 //!
 //! ```rb
@@ -38,8 +35,8 @@
 //! # In alox-48, this is not the case. Each index will be a "unique" ""object"".
 //! ```
 //!
-//! This does not map well to rust, as it inherently requires a garbage collector.
-//! alox-48 will still deserialize object links, however it will simply deserialize them as a copy instead.
+//! This behavior could be simulated with [`Rc`] and/or [`Arc`] like `thurgood`, however for the sake of ergonomics (and memory cycles)
+//! alox-48 deserializes object links as copies instead. alox-48 does not serialize object links at all.
 
 // Copyright (C) 2022 Lily Lyons
 //
@@ -60,31 +57,28 @@
 
 pub(crate) mod tag;
 
-/// Deserialization via marshal.
-///
-/// [`crate::VisitorExt`] is responsible for extending serde.
+/// Marshal Deserialization framework and Deserializer.
 pub mod de;
-/// Marshal serialization.
-///
-/// [`crate::SerializeExt`] is responsible for extending serde.
+/// Marshal Serialization framework and Serializer.
 pub mod ser;
-/// Untyped ruby values and rust equivalents of some ruby types (Hash, Array, etc).
-///
-/// Useful for deserializing untyped data.
-pub mod value;
 
-pub mod rb_types;
+mod value;
+pub use value::{from_value, to_value, Serializer as ValueSerializer, Value};
+
+mod rb_types;
 pub use rb_types::{Object, RbArray, RbFields, RbHash, RbString, Sym, Symbol, Userdata};
 
 pub use de::{
     ArrayAccess, Deserialize, Deserializer, DeserializerTrait, Error as DeError, HashAccess,
-    InstanceAccess, IvarAccess, Visitor, VisitorOption,
+    InstanceAccess, IvarAccess, Result as DeResult, Visitor, VisitorOption,
 };
 pub use ser::{
-    Error as SerError, Serialize, SerializeArray, SerializeHash, SerializeIvars, Serializer,
-    SerializerTrait,
+    Error as SerError, Result as SerResult, Serialize, SerializeArray, SerializeHash,
+    SerializeIvars, Serializer, SerializerTrait,
 };
-pub use value::{from_value, to_value, Value};
+
+#[cfg(feature = "derive")]
+pub use alox_48_derive::{Deserialize, Serialize};
 
 /// Deserialize data from some bytes.
 /// It's a convenience function over [`Deserializer::new`] and [`Deserialize::deserialize`].

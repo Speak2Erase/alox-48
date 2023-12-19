@@ -200,7 +200,7 @@ impl Error {
                     exp => {
                         for (i, exp) in exp.iter().enumerate() {
                             if i > 0 {
-                                write!(f, ", ");
+                                write!(f, ", ")?;
                             }
                             write!(f, "`{exp}`")?;
                         }

@@ -1,6 +1,6 @@
 use std::process::Command;
 
-use alox_48::value::Symbol;
+use alox_48::Symbol;
 
 fn main() {
     color_eyre::install().unwrap();

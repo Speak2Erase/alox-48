@@ -10,17 +10,18 @@ keywords = ["ruby", "serde", "deserialization", "marshal", "ruby-marshal"]
 categories = ["parser-implementations"]
 
 [dependencies]
-serde = { version = "1", features = ["derive"] }
 enum-as-inner = "0.6"
 indexmap = { version = "2.0", features = ["serde", "std"] }
 thiserror = "1.0"
 paste = "1.0"
 
+alox-48-derive = { version = "0.1.0", path = "../alox-48-derive/", optional = true }
+serde = { version = "1", features = ["derive"], optional = true }
+
 [features]
-warn-encoding = []
-derive = []
-serde-adapter = []
-default = ["warn-encoding", "derive", "serde-adapter"]
+derive = ["alox-48-derive"]
+serde-adapter = ["serde"]
+default = ["derive", "serde-adapter"]
 
 [dev-dependencies]
 pretty-hex = "0.4.0"

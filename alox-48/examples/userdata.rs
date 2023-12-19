@@ -1,10 +1,8 @@
 #![allow(dead_code)]
 use std::process::Command;
 
-use serde::Deserialize;
-
-#[derive(Deserialize, Debug)]
-#[serde(from = "alox_48::Userdata")]
+#[derive(alox_48::Deserialize, alox_48::Serialize, Debug)]
+#[marshal(from = "alox_48::Userdata")]
 struct Floats([f32; 3]);
 
 impl From<alox_48::Userdata> for Floats {

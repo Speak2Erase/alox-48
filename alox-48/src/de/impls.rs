@@ -228,6 +228,20 @@ where
     }
 }
 
+impl<'de, T> Deserialize<'de> for Option<T>
+where
+    T: Deserialize<'de>,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self>
+    where
+        D: DeserializerTrait<'de>,
+    {
+        deserializer.deserialize_option(OptionVisitor {
+            marker: PhantomData,
+        })
+    }
+}
+
 macro_rules! seq_impl {
     (
         $(#[$attr:meta])*

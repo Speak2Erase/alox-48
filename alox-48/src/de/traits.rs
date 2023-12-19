@@ -53,13 +53,13 @@ pub trait Visitor<'de>: Sized {
     }
 
     // Collections
-    fn visit_hash<A>(self, map: A) -> Result<Self::Value>
+    fn visit_hash<A>(self, _map: A) -> Result<Self::Value>
     where
         A: HashAccess<'de>,
     {
         Err(Error::invalid_value(Unexpected::Hash, &self))
     }
-    fn visit_array<A>(self, array: A) -> Result<Self::Value>
+    fn visit_array<A>(self, _array: A) -> Result<Self::Value>
     where
         A: ArrayAccess<'de>,
     {
@@ -71,18 +71,18 @@ pub trait Visitor<'de>: Sized {
     fn visit_symbol(self, symbol: &'de Sym) -> Result<Self::Value> {
         Err(Error::invalid_value(Unexpected::Symbol(symbol), &self))
     }
-    fn visit_regular_expression(self, regex: &'de [u8], flags: u8) -> Result<Self::Value> {
+    fn visit_regular_expression(self, regex: &'de [u8], _flags: u8) -> Result<Self::Value> {
         Err(Error::invalid_value(Unexpected::Regex(regex), &self))
     }
 
     // Class instances types
-    fn visit_object<A>(self, class: &'de Sym, instance_variables: A) -> Result<Self::Value>
+    fn visit_object<A>(self, class: &'de Sym, _instance_variables: A) -> Result<Self::Value>
     where
         A: IvarAccess<'de>,
     {
         Err(Error::invalid_value(Unexpected::Object(class), &self))
     }
-    fn visit_struct<A>(self, name: &'de Sym, members: A) -> Result<Self::Value>
+    fn visit_struct<A>(self, name: &'de Sym, _members: A) -> Result<Self::Value>
     where
         A: IvarAccess<'de>,
     {
@@ -106,7 +106,7 @@ pub trait Visitor<'de>: Sized {
         let (value, _) = instance.value(self)?;
         Ok(value)
     }
-    fn visit_extended<D>(self, module: &'de Sym, deserializer: D) -> Result<Self::Value>
+    fn visit_extended<D>(self, _module: &'de Sym, deserializer: D) -> Result<Self::Value>
     where
         D: Deserializer<'de>,
     {
@@ -114,22 +114,22 @@ pub trait Visitor<'de>: Sized {
     }
 
     // User types
-    fn visit_user_class<D>(self, class: &'de Sym, deserializer: D) -> Result<Self::Value>
+    fn visit_user_class<D>(self, _class: &'de Sym, deserializer: D) -> Result<Self::Value>
     where
         D: Deserializer<'de>,
     {
         deserializer.deserialize(self)
     }
-    fn visit_user_data(self, class: &'de Sym, data: &'de [u8]) -> Result<Self::Value> {
+    fn visit_user_data(self, class: &'de Sym, _data: &'de [u8]) -> Result<Self::Value> {
         Err(Error::invalid_value(Unexpected::UserData(class), &self))
     }
-    fn visit_user_marshal<D>(self, class: &'de Sym, deserializer: D) -> Result<Self::Value>
+    fn visit_user_marshal<D>(self, _class: &'de Sym, deserializer: D) -> Result<Self::Value>
     where
         D: Deserializer<'de>,
     {
         deserializer.deserialize(self)
     }
-    fn visit_data<D>(self, class: &'de Sym, deserializer: D) -> Result<Self::Value>
+    fn visit_data<D>(self, _class: &'de Sym, deserializer: D) -> Result<Self::Value>
     where
         D: Deserializer<'de>,
     {
@@ -238,11 +238,11 @@ where
     }
 
     fn len(&self) -> usize {
-        (*self).len()
+        (**self).len()
     }
 
     fn index(&self) -> usize {
-        (*self).index()
+        (**self).index()
     }
 }
 
@@ -273,11 +273,11 @@ where
     }
 
     fn len(&self) -> usize {
-        (*self).len()
+        (**self).len()
     }
 
     fn index(&self) -> usize {
-        (*self).index()
+        (**self).index()
     }
 }
 
@@ -293,10 +293,10 @@ where
     }
 
     fn len(&self) -> usize {
-        (*self).len()
+        (**self).len()
     }
 
     fn index(&self) -> usize {
-        (*self).index()
+        (**self).index()
     }
 }

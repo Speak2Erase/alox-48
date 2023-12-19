@@ -1,4 +1,4 @@
-#[derive(serde::Deserialize, serde::Serialize, Debug)]
+#[derive(alox_48::Deserialize, alox_48::Serialize, Debug)]
 struct MyStruct {
     test: String,
 }

@@ -96,7 +96,7 @@ impl Tag {
         }
     }
 
-    pub fn is_object_link_referenceable(&self) -> bool {
+    pub fn is_object_link_referenceable(self) -> bool {
         !matches!(
             self,
             Self::Nil

@@ -33,13 +33,13 @@ impl<'de> Visitor<'de> for IgnoredVisitor {
     fn visit_nil(self) -> Result<Self::Value> {
         Ok(Ignored)
     }
-    fn visit_bool(self, v: bool) -> Result<Self::Value> {
+    fn visit_bool(self, _v: bool) -> Result<Self::Value> {
         Ok(Ignored)
     }
-    fn visit_i32(self, v: i32) -> Result<Self::Value> {
+    fn visit_i32(self, _v: i32) -> Result<Self::Value> {
         Ok(Ignored)
     }
-    fn visit_f64(self, v: f64) -> Result<Self::Value> {
+    fn visit_f64(self, _v: f64) -> Result<Self::Value> {
         Ok(Ignored)
     }
 
@@ -57,24 +57,24 @@ impl<'de> Visitor<'de> for IgnoredVisitor {
         while let Some(Ignored) = array.next_element()? {}
         Ok(Ignored)
     }
-    fn visit_string(self, string: &'de [u8]) -> Result<Self::Value> {
+    fn visit_string(self, _string: &'de [u8]) -> Result<Self::Value> {
         Ok(Ignored)
     }
-    fn visit_symbol(self, symbol: &'de Sym) -> Result<Self::Value> {
+    fn visit_symbol(self, _symbol: &'de Sym) -> Result<Self::Value> {
         Ok(Ignored)
     }
-    fn visit_regular_expression(self, regex: &'de [u8], flags: u8) -> Result<Self::Value> {
+    fn visit_regular_expression(self, _regex: &'de [u8], _flags: u8) -> Result<Self::Value> {
         Ok(Ignored)
     }
 
-    fn visit_object<A>(self, class: &'de Sym, mut instance_variables: A) -> Result<Self::Value>
+    fn visit_object<A>(self, _class: &'de Sym, mut instance_variables: A) -> Result<Self::Value>
     where
         A: IvarAccess<'de>,
     {
         while let Some((_, Ignored)) = instance_variables.next_entry()? {}
         Ok(Ignored)
     }
-    fn visit_struct<A>(self, name: &'de Sym, mut members: A) -> Result<Self::Value>
+    fn visit_struct<A>(self, _name: &'de Sym, mut members: A) -> Result<Self::Value>
     where
         A: IvarAccess<'de>,
     {
@@ -82,10 +82,10 @@ impl<'de> Visitor<'de> for IgnoredVisitor {
         Ok(Ignored)
     }
 
-    fn visit_class(self, class: &'de Sym) -> Result<Self::Value> {
+    fn visit_class(self, _class: &'de Sym) -> Result<Self::Value> {
         Ok(Ignored)
     }
-    fn visit_module(self, module: &'de Sym) -> Result<Self::Value> {
+    fn visit_module(self, _module: &'de Sym) -> Result<Self::Value> {
         Ok(Ignored)
     }
 
@@ -98,25 +98,25 @@ impl<'de> Visitor<'de> for IgnoredVisitor {
         Ok(Ignored)
     }
 
-    fn visit_extended<D>(self, module: &'de Sym, deserializer: D) -> Result<Self::Value>
+    fn visit_extended<D>(self, _module: &'de Sym, deserializer: D) -> Result<Self::Value>
     where
         D: DeserializerTrait<'de>,
     {
         deserializer.deserialize(IgnoredVisitor)
     }
 
-    fn visit_user_class<D>(self, class: &'de Sym, deserializer: D) -> Result<Self::Value>
+    fn visit_user_class<D>(self, _class: &'de Sym, deserializer: D) -> Result<Self::Value>
     where
         D: DeserializerTrait<'de>,
     {
         deserializer.deserialize(IgnoredVisitor)
     }
 
-    fn visit_user_data(self, class: &'de Sym, data: &'de [u8]) -> Result<Self::Value> {
+    fn visit_user_data(self, _class: &'de Sym, _data: &'de [u8]) -> Result<Self::Value> {
         Ok(Ignored)
     }
 
-    fn visit_user_marshal<D>(self, class: &'de Sym, deserializer: D) -> Result<Self::Value>
+    fn visit_user_marshal<D>(self, _class: &'de Sym, deserializer: D) -> Result<Self::Value>
     where
         D: DeserializerTrait<'de>,
     {

@@ -21,8 +21,8 @@ mod ignored;
 mod impls;
 mod traits;
 
-pub(crate) use error::Result;
-pub use error::{Error, Kind};
+pub use error::Result;
+pub use error::{Error, Kind, Unexpected};
 
 pub use deserializer::Deserializer;
 pub use traits::{
