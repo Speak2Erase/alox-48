@@ -27,13 +27,12 @@ use syn::{Ident, Path, Type};
 // not sure how to handle newtypes and unit structs
 // maybe userclass would make sense but that would be a bit of a stretch
 // do want to add support for enums in the future though!
-#[darling(supports(struct_named, struct_tuple))]
+#[darling(supports(struct_named))]
 struct TypeReciever {
     ident: Ident,
     data: darling::ast::Data<darling::util::Ignored, FieldReciever>,
 
     class: Option<String>,
-    #[darling(default)]
     deny_unknown_fields: Flag,
     #[darling(rename = "default")]
     default_fn: Option<Override<Path>>,
@@ -69,11 +68,11 @@ pub fn derive_inner(input: syn::DeriveInput) -> proc_macro2::TokenStream {
 
     quote! {
         #[doc(hidden)]
-        #[allow(non_upper_case_globals, non_snake_case, unused_attributes, unused_qualifications, no_effect_underscore_binding)]
+        #[allow(non_upper_case_globals, non_snake_case, unused_attributes, unused_qualifications, no_effect_underscore_binding, non_camel_case_types)]
         const _: () = {
             extern crate alox_48 as _alox_48;
             use _alox_48::{
-                ArrayAccess, Deserialize, DeserializerTrait, DeserializerTrait, DeError, HashAccess,
+                ArrayAccess, Deserialize, DeserializerTrait, DeError, HashAccess,
                 InstanceAccess, IvarAccess, Visitor, VisitorOption, DeResult, Sym,
                 de::Unexpected,
             };
@@ -82,4 +81,93 @@ pub fn derive_inner(input: syn::DeriveInput) -> proc_macro2::TokenStream {
     }
 }
 
-fn parse_fields(reciever: TypeReciever) -> proc_macro2::TokenStream {}
+fn parse_fields(reciever: TypeReciever) -> proc_macro2::TokenStream {
+    let ty = reciever.ident;
+    let fields = reciever.data.take_struct().unwrap();
+
+    let field_lets = fields.iter().map(|field| {
+        let field_ident = field.ident.as_ref().unwrap();
+
+        let field_str = format!("__field_{field_ident}");
+        let var_ident = syn::Ident::new(&field_str, field_ident.span());
+
+        let field_ty = field.ty.clone();
+        quote! {
+            let mut #var_ident: Option<#field_ty> = None;
+        }
+    });
+    let field_match = fields.iter().map(|field| {
+        let field_ident = field.ident.as_ref().unwrap();
+        let field_lit_str = syn::LitStr::new(&field_ident.to_string(), field_ident.span());
+
+        let field_str = format!("__field_{field_ident}");
+        let var_ident = syn::Ident::new(&field_str, field_ident.span());
+
+        let field_ty = field.ty.clone();
+        quote! {
+            #field_lit_str => {
+                let __v = _instance_variables.next_value::<#field_ty>()?;
+                #var_ident = Some(__v);
+            }
+        }
+    });
+    let instantiate_fields = fields.iter().map(|field| {
+        let field_ident = field.ident.clone().unwrap();
+        let field_lit_str = syn::LitStr::new(&field_ident.to_string(), field_ident.span());
+
+        let field_str = format!("__field_{field_ident}");
+        let var_ident = syn::Ident::new(&field_str, field_ident.span());
+
+        quote! {
+            #field_ident: #var_ident.ok_or_else(|| {
+                DeError::missing_field(Sym::new(#field_lit_str))
+            })?
+        }
+    });
+
+    let expecting_text = format!(
+        "an instance of {}",
+        reciever.class.unwrap_or_else(|| ty.to_string())
+    );
+    let expecting_lit = syn::LitStr::new(&expecting_text, ty.span());
+
+    quote::quote! {
+        #[automatically_derived]
+        impl<'de> Deserialize<'de> for #ty {
+            fn deserialize<D>(deserializer: D) -> Result<Self, DeError>
+            where
+                D: DeserializerTrait<'de>
+            {
+                struct __Visitor;
+
+                impl<'de> Visitor<'de> for __Visitor {
+                    type Value = #ty;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        formatter.write_str(#expecting_lit)
+                    }
+
+                    fn visit_object<A>(self, class: &'de Sym, mut _instance_variables: A) -> Result<Self::Value, DeError>
+                    where
+                        A: IvarAccess<'de>,
+                    {
+                        #( #field_lets );*
+
+                        while let Some(f) = _instance_variables.next_ivar()? {
+                            match f.to_rust_field_name().unwrap_or(f).as_str() {
+                                #( #field_match ),*
+                                _ => {}
+                            }
+                        }
+
+                        Ok(#ty {
+                            #( #instantiate_fields ),*
+                        })
+                    }
+                }
+
+                deserializer.deserialize(__Visitor)
+            }
+        }
+    }
+}
