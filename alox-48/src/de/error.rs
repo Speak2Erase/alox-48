@@ -169,9 +169,9 @@ impl<'a> std::fmt::Display for Unexpected<'a> {
 }
 
 impl Error {
-    pub fn custom(str: String) -> Self {
+    pub fn custom(str: impl Into<String>) -> Self {
         Error {
-            kind: Kind::Message(str),
+            kind: Kind::Message(str.into()),
         }
     }
 

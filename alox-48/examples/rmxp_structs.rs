@@ -1,6 +1,6 @@
 #![allow(dead_code, missing_docs)]
 
-use serde::Deserialize;
+use alox_48::Deserialize;
 
 #[derive(Debug, Deserialize)]
 pub struct Color {
@@ -23,7 +23,7 @@ impl Default for Color {
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(from = "alox_48::Value")]
+#[marshal(from = "alox_48::Value")]
 pub enum ParameterType {
     Integer(i32),
     String(String),
@@ -39,7 +39,7 @@ pub enum ParameterType {
 
 macro_rules! symbol {
     ($string:literal) => {
-        &alox_48::value::Symbol::from($string)
+        &alox_48::Symbol::from($string)
         // &alox_48::Value::Symbol($string.to_string())
     };
 }
@@ -150,11 +150,11 @@ pub struct Tone {
 }
 
 pub mod rpg {
-    use serde::{Deserialize, Serialize};
+    use alox_48::Deserialize;
     use std::collections::HashMap;
 
     #[derive(Debug, Deserialize)]
-    #[serde(deny_unknown_fields)]
+    #[marshal(deny_unknown_fields)]
     pub struct Map {
         pub tileset_id: i32,
         pub width: usize,
@@ -169,8 +169,8 @@ pub mod rpg {
         pub events: HashMap<i32, event::Event>,
     }
 
-    #[derive(Deserialize, Serialize, Debug)]
-    #[serde(from = "alox_48::value::Userdata")]
+    #[derive(Deserialize, Debug)]
+    #[marshal(from = "alox_48::Userdata")]
     pub struct Table3 {
         xsize: usize,
         ysize: usize,
@@ -178,8 +178,8 @@ pub mod rpg {
         data: Vec<i16>,
     }
 
-    impl From<alox_48::value::Userdata> for Table3 {
-        fn from(value: alox_48::value::Userdata) -> Self {
+    impl From<alox_48::Userdata> for Table3 {
+        fn from(value: alox_48::Userdata) -> Self {
             let u32_slice: &[u32] =
                 bytemuck::cast_slice(&value.data[0..std::mem::size_of::<u32>() * 5]);
 
@@ -204,14 +204,14 @@ pub mod rpg {
     }
 
     pub mod event {
-        use serde::Deserialize;
+        use alox_48::Deserialize;
         mod page {
-            use serde::{Deserialize, Serialize};
+            use alox_48::Deserialize;
 
             use super::super::{EventCommand, MoveRoute};
 
-            #[derive(Debug, Deserialize, Serialize)]
-            #[serde(deny_unknown_fields)]
+            #[derive(Debug, Deserialize)]
+            #[marshal(deny_unknown_fields)]
             pub struct Condition {
                 pub switch1_valid: bool,
                 pub switch2_valid: bool,
@@ -224,8 +224,8 @@ pub mod rpg {
                 pub self_switch_ch: String,
             }
 
-            #[derive(Debug, Deserialize, Serialize)]
-            #[serde(deny_unknown_fields)]
+            #[derive(Debug, Deserialize)]
+            #[marshal(deny_unknown_fields)]
             pub struct Graphic {
                 pub tile_id: i32,
                 pub character_name: String,
@@ -237,7 +237,7 @@ pub mod rpg {
             }
 
             #[derive(Debug, Deserialize)]
-            #[serde(deny_unknown_fields)]
+            #[marshal(deny_unknown_fields)]
             pub struct Page {
                 pub condition: Condition,
                 pub graphic: Graphic,
@@ -256,7 +256,7 @@ pub mod rpg {
         }
 
         #[derive(Debug, Deserialize)]
-        #[serde(deny_unknown_fields)]
+        #[marshal(deny_unknown_fields)]
         pub struct Event {
             pub id: usize,
             pub name: String,
@@ -267,15 +267,15 @@ pub mod rpg {
     }
 
     #[derive(Debug, Deserialize)]
-    #[serde(deny_unknown_fields)]
+    #[marshal(deny_unknown_fields)]
     pub struct MoveRoute {
         pub repeat: bool,
         pub skippable: bool,
         pub list: Vec<MoveCommand>,
     }
 
-    #[derive(Debug, Deserialize, Serialize)]
-    #[serde(deny_unknown_fields)]
+    #[derive(Debug, Deserialize)]
+    #[marshal(deny_unknown_fields)]
     pub struct AudioFile {
         pub name: String,
         pub volume: u8,
@@ -285,7 +285,7 @@ pub mod rpg {
     type Parameter = alox_48::Value;
 
     #[derive(Debug, Deserialize)]
-    #[serde(deny_unknown_fields)]
+    #[marshal(deny_unknown_fields)]
     pub struct EventCommand {
         pub code: i32,
         pub indent: usize,
@@ -293,13 +293,13 @@ pub mod rpg {
     }
 
     #[derive(Debug, Deserialize)]
-    #[serde(deny_unknown_fields)]
+    #[marshal(deny_unknown_fields)]
     pub struct MoveCommand {
         pub code: i32,
         pub parameters: Vec<Parameter>,
     }
 
-    #[derive(Default, Debug, Deserialize, Serialize)]
+    #[derive(Default, Debug, Deserialize)]
     pub struct Actor {
         pub id: i32,
         pub name: String,
@@ -325,16 +325,16 @@ pub mod rpg {
         pub armor4_fix: bool,
     }
 
-    #[derive(Debug, Default, Serialize, Deserialize)]
-    #[serde(from = "alox_48::value::Userdata")]
+    #[derive(Debug, Default, Deserialize)]
+    #[marshal(from = "alox_48::Userdata")]
     pub struct Table2 {
         xsize: usize,
         ysize: usize,
         data: Vec<i16>,
     }
 
-    impl From<alox_48::value::Userdata> for Table2 {
-        fn from(value: alox_48::value::Userdata) -> Self {
+    impl From<alox_48::Userdata> for Table2 {
+        fn from(value: alox_48::Userdata) -> Self {
             let u32_slice: &[u32] =
                 bytemuck::cast_slice(&value.data[0..std::mem::size_of::<u32>() * 5]);
 
@@ -354,28 +354,27 @@ pub mod rpg {
     }
 }
 
-use serde::Serialize;
 use std::ops::{Deref, DerefMut};
 
 /// An array that is serialized and deserialized as padded with a None element.
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Clone)]
 pub struct NilPadded<T>(Vec<T>);
 
-impl<'de, T> serde::Deserialize<'de> for NilPadded<T>
+impl<'de, T> alox_48::Deserialize<'de> for NilPadded<T>
 where
-    T: serde::Deserialize<'de>,
+    T: alox_48::Deserialize<'de>,
 {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    fn deserialize<D>(deserializer: D) -> Result<Self, alox_48::DeError>
     where
-        D: serde::Deserializer<'de>,
+        D: alox_48::DeserializerTrait<'de>,
     {
         struct Visitor<T> {
             _marker: core::marker::PhantomData<T>,
         }
 
-        impl<'de, T> serde::de::Visitor<'de> for Visitor<T>
+        impl<'de, T> alox_48::de::Visitor<'de> for Visitor<T>
         where
-            T: serde::Deserialize<'de>,
+            T: alox_48::Deserialize<'de>,
         {
             type Value = NilPadded<T>;
 
@@ -383,17 +382,15 @@ where
                 formatter.write_str("a nil padded array")
             }
 
-            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            fn visit_array<A>(self, mut seq: A) -> Result<Self::Value, alox_48::DeError>
             where
-                A: serde::de::SeqAccess<'de>,
+                A: alox_48::de::ArrayAccess<'de>,
             {
-                use serde::de::Error;
-
-                let mut values = Vec::with_capacity(seq.size_hint().unwrap_or(0));
+                let mut values = Vec::with_capacity(seq.len());
 
                 if let Some(v) = seq.next_element::<Option<T>>()? {
                     if v.is_some() {
-                        return Err(A::Error::custom("the first element was not nil"));
+                        return Err(alox_48::DeError::custom("the first element was not nil"));
                     }
                 }
 
@@ -405,7 +402,7 @@ where
             }
         }
 
-        deserializer.deserialize_seq(Visitor {
+        deserializer.deserialize(Visitor {
             _marker: core::marker::PhantomData,
         })
     }

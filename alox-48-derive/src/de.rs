@@ -27,7 +27,7 @@ use syn::{Ident, Path, Type};
 // not sure how to handle newtypes and unit structs
 // maybe userclass would make sense but that would be a bit of a stretch
 // do want to add support for enums in the future though!
-#[darling(supports(struct_named))]
+#[darling(supports(struct_named, enum_named, enum_newtype))]
 struct TypeReciever {
     ident: Ident,
     data: darling::ast::Data<darling::util::Ignored, FieldReciever>,
@@ -40,8 +40,6 @@ struct TypeReciever {
     from_type: Option<Type>,
     #[darling(rename = "try_from")]
     try_from_type: Option<Type>,
-    #[darling(rename = "into")]
-    into_type: Option<Type>,
     expecting: Option<String>,
 }
 
@@ -83,6 +81,21 @@ pub fn derive_inner(input: syn::DeriveInput) -> proc_macro2::TokenStream {
 
 fn parse_fields(reciever: TypeReciever) -> proc_macro2::TokenStream {
     let ty = reciever.ident;
+
+    if let Some(into_ty) = reciever.from_type {
+        return quote::quote! {
+            #[automatically_derived]
+            impl<'de> Deserialize<'de> for #ty {
+                fn deserialize<D>(deserializer: D) -> Result<Self, DeError>
+                where
+                    D: DeserializerTrait<'de>
+                {
+                    #into_ty::deserialize(deserializer).map(Into::into)
+                }
+            }
+        };
+    }
+
     let fields = reciever.data.take_struct().unwrap();
 
     let field_lets = fields.iter().map(|field| {
