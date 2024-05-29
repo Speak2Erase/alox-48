@@ -3,14 +3,30 @@ use std::{collections::HashMap, process::Command};
 
 #[derive(Debug, alox_48::Deserialize, Default)]
 struct MyClass {
+    #[marshal(skip)]
     #[marshal(default = "default_test")]
     test: Test,
-    bool: bool,
+    #[marshal(deserialize_with = "with_test")]
+    bool: i32,
 }
 
 #[derive(Debug, alox_48::Deserialize, Default)]
 struct Test {
     map: HashMap<String, bool>,
+}
+
+fn default_test() -> Test {
+    Test {
+        map: HashMap::new(),
+    }
+}
+
+fn with_test<'de, D>(deserializer: D) -> Result<i32, alox_48::DeError>
+where
+    D: alox_48::DeserializerTrait<'de>,
+{
+    let bool: bool = alox_48::Deserialize::deserialize(deserializer)?;
+    Ok(bool as i32 >> 4)
 }
 
 fn main() {

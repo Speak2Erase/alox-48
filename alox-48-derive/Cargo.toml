@@ -15,3 +15,5 @@ darling = "0.20"
 
 proc-macro2 = "1.0"
 proc-macro-error = "1.0"
+
+itertools = "0.13.0"

@@ -56,14 +56,3 @@ pub enum Kind {
     #[error("Serde error: {0}")]
     Message(String),
 }
-
-impl serde::ser::Error for Error {
-    fn custom<T>(msg: T) -> Self
-    where
-        T: std::fmt::Display,
-    {
-        Error {
-            kind: Kind::Message(msg.to_string()),
-        }
-    }
-}

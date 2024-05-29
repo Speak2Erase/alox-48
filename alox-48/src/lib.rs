@@ -1,6 +1,6 @@
 #![warn(rust_2018_idioms, clippy::pedantic)]
 #![warn(
-    missing_docs,
+    // missing_docs,
     missing_debug_implementations,
     missing_copy_implementations,
     clippy::panic,
@@ -8,7 +8,13 @@
     clippy::panicking_unwrap,
     clippy::all
 )]
-#![allow(clippy::must_use_candidate, clippy::missing_errors_doc)]
+#![allow(
+    clippy::must_use_candidate,
+    clippy::missing_errors_doc,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_lossless
+)]
 
 //! alox-48
 //! (short for aluminum oxide 48)
