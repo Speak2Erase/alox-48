@@ -53,6 +53,14 @@ pub enum Kind {
     OvershotProvidedLen(usize),
     #[error("Undershot the provided len: {0}")]
     UndershotProvidedLen(usize),
-    #[error("Serde error: {0}")]
+    #[error("{0}")]
     Message(String),
+}
+
+impl Error {
+    pub fn custom(message: impl Into<String>) -> Self {
+        Self {
+            kind: Kind::Message(message.into()),
+        }
+    }
 }

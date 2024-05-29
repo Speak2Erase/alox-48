@@ -15,7 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with alox-48.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::borrow::Borrow;
+use std::borrow::{Borrow, Cow};
 
 use crate::{
     de::Result as DeResult, ser::Result as SerResult, Deserialize, DeserializerTrait, Serialize,
@@ -44,6 +44,14 @@ impl Sym {
 
     pub fn is_ivar(&self) -> bool {
         self.0.starts_with('@')
+    }
+
+    pub fn to_ivar(&self) -> Cow<'_, Self> {
+        if self.is_ivar() {
+            Cow::Borrowed(self)
+        } else {
+            Cow::Owned(Symbol::new(format!("@{}", self.as_str())))
+        }
     }
 
     pub fn to_rust_field_name(&self) -> Option<&Self> {
@@ -93,7 +101,7 @@ impl Default for &Sym {
 
 impl std::fmt::Display for Sym {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!("\"{}\"", &self.0))
+        f.write_fmt(format_args!(":{}", &self.0))
     }
 }
 

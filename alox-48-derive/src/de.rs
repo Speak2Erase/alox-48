@@ -21,7 +21,7 @@ use darling::{
 };
 use itertools::Itertools;
 use proc_macro2::TokenStream;
-use quote::{quote, quote_spanned};
+use quote::quote;
 use syn::{spanned::Spanned, Ident, LitStr, Path, Type};
 
 #[derive(Debug, FromDeriveInput)]
@@ -63,6 +63,7 @@ struct FieldReciever {
     with_module: Option<Path>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, darling::FromVariant)]
 struct VariantReciever {
     ident: Ident,
@@ -98,9 +99,7 @@ fn parse_reciever(reciever: &TypeReciever) -> TokenStream {
     let ty = &reciever.ident;
 
     if reciever.try_from_type.is_some() && reciever.from_type.is_some() {
-        return quote_spanned! {
-            reciever.ident.span() => compile_error!("Cannot specify both `from` and `try_from`")
-        };
+        return quote! { compile_error!("Cannot specify both `from` and `try_from`") };
     }
 
     if let Some(into_ty) = reciever.from_type.as_ref() {
@@ -389,6 +388,8 @@ fn parse_field(reciever_has_default: bool, field: &FieldReciever) -> ParseResult
     (const_sym, let_field, match_field, instantiate_field)
 }
 
-fn parse_enum(reciever: &TypeReciever, variants: &[VariantReciever]) -> TokenStream {
-    todo!()
+fn parse_enum(_reciever: &TypeReciever, _variants: &[VariantReciever]) -> TokenStream {
+    quote! {
+        compile_error!("Derive macro does not currently automatic deserialize impls for enums!")
+    }
 }
