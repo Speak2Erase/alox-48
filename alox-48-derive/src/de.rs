@@ -24,13 +24,10 @@ use syn::{Ident, Path, Type};
 
 #[derive(Debug, FromDeriveInput)]
 #[darling(attributes(marshal))]
-// not sure how to handle newtypes and unit structs
-// maybe userclass would make sense but that would be a bit of a stretch
-// do want to add support for enums in the future though!
-#[darling(supports(struct_named, enum_named, enum_newtype))]
+#[darling(supports(struct_any, enum_any))]
 struct TypeReciever {
     ident: Ident,
-    data: darling::ast::Data<darling::util::Ignored, FieldReciever>,
+    data: darling::ast::Data<VariantReciever, FieldReciever>,
 
     class: Option<String>,
     deny_unknown_fields: Flag,
@@ -60,9 +57,18 @@ struct FieldReciever {
     with_module: Option<Path>,
 }
 
+#[derive(Debug, darling::FromVariant)]
+struct VariantReciever {
+    ident: Ident,
+    fields: darling::ast::Fields<FieldReciever>,
+
+    transparent: Flag,
+    class: Option<String>,
+}
+
 pub fn derive_inner(input: syn::DeriveInput) -> proc_macro2::TokenStream {
     let reciever = TypeReciever::from_derive_input(&input).unwrap();
-    let deserialization_impl = parse_fields(reciever);
+    let deserialization_impl = parse_reciever(&reciever);
 
     quote! {
         #[doc(hidden)]
@@ -79,10 +85,16 @@ pub fn derive_inner(input: syn::DeriveInput) -> proc_macro2::TokenStream {
     }
 }
 
-fn parse_fields(reciever: TypeReciever) -> proc_macro2::TokenStream {
-    let ty = reciever.ident;
+fn parse_reciever(reciever: &TypeReciever) -> proc_macro2::TokenStream {
+    let ty = &reciever.ident;
 
-    if let Some(into_ty) = reciever.from_type {
+    if reciever.try_from_type.is_some() && reciever.from_type.is_some() {
+        return quote_spanned! {
+            reciever.ident.span() => compile_error!("Cannot specify both `from` and `try_from`")
+        };
+    }
+
+    if let Some(into_ty) = reciever.from_type.as_ref() {
         return quote::quote! {
             #[automatically_derived]
             impl<'de> Deserialize<'de> for #ty {
@@ -96,8 +108,37 @@ fn parse_fields(reciever: TypeReciever) -> proc_macro2::TokenStream {
         };
     }
 
-    let fields = reciever.data.take_struct().unwrap();
+    if let Some(try_into_ty) = reciever.try_from_type.as_ref() {
+        return quote::quote! {
+            #[automatically_derived]
+            impl<'de> Deserialize<'de> for #ty {
+                fn deserialize<D>(deserializer: D) -> Result<Self, DeError>
+                where
+                    D: DeserializerTrait<'de>
+                {
+                    #try_into_ty::deserialize(deserializer)?.try_into().map_err(DeError::custom)
+                }
+            }
+        };
+    }
 
+    match &reciever.data {
+        darling::ast::Data::Enum(e) => parse_enum(reciever, e),
+        darling::ast::Data::Struct(f) => parse_struct(reciever, f),
+    }
+}
+
+fn parse_struct(
+    reciever: &TypeReciever,
+    fields: &darling::ast::Fields<FieldReciever>,
+) -> proc_macro2::TokenStream {
+    let ty = reciever.ident.clone();
+
+    let field_const = fields.iter().map(|field| {
+        let field_ident = field.ident.as_ref().unwrap();
+        let literal = syn::LitStr::new(&field_ident.to_string(), field_ident.span());
+        quote! { Sym::new(#literal) }
+    });
     let field_lets = fields.iter().map(|field| {
         let field_ident = field.ident.as_ref().unwrap();
 
@@ -127,21 +168,52 @@ fn parse_fields(reciever: TypeReciever) -> proc_macro2::TokenStream {
     let instantiate_fields = fields.iter().map(|field| {
         let field_ident = field.ident.clone().unwrap();
         let field_lit_str = syn::LitStr::new(&field_ident.to_string(), field_ident.span());
+        let field_ty = field.ty.clone();
 
         let field_str = format!("__field_{field_ident}");
         let var_ident = syn::Ident::new(&field_str, field_ident.span());
 
-        quote! {
-            #field_ident: #var_ident.ok_or_else(|| {
-                DeError::missing_field(Sym::new(#field_lit_str))
-            })?
+        if let Some(default_fn) = field.default_fn.as_ref() {
+            if let Some(p) = default_fn.as_ref().explicit() {
+                quote! { #field_ident: #p(); }
+            } else {
+                quote! { #field_ident: <#field_ty as Default>::default(); }
+            }
+        } else if reciever.default_fn.is_some() {
+            quote! {
+                #field_ident: #var_ident.unwrap_or(default.#field_ident)
+            }
+        } else {
+            quote! {
+                #field_ident: #var_ident.ok_or_else(|| {
+                    DeError::missing_field(Sym::new(#field_lit_str))
+                })?
+            }
+        }
+    });
+    let unknown_fields = if reciever.deny_unknown_fields.is_present() {
+        quote::quote! {
+            _f => return Err(DeError::unknown_field(Sym::new(_f), __FIELDS))
+        }
+    } else {
+        quote::quote! {
+            _ => {}
+        }
+    };
+    let default = reciever.default_fn.as_ref().map(|d| {
+        if let Some(p) = d.as_ref().explicit() {
+            quote! { let default = #p(); }
+        } else {
+            quote! { let default = <#ty as Default>::default(); }
         }
     });
 
-    let expecting_text = format!(
-        "an instance of {}",
-        reciever.class.unwrap_or_else(|| ty.to_string())
-    );
+    let expecting_text = reciever.expecting.clone().unwrap_or_else(|| {
+        format!(
+            "an instance of {}",
+            reciever.class.clone().unwrap_or_else(|| ty.to_string())
+        )
+    });
     let expecting_lit = syn::LitStr::new(&expecting_text, ty.span());
 
     quote::quote! {
@@ -151,6 +223,10 @@ fn parse_fields(reciever: TypeReciever) -> proc_macro2::TokenStream {
             where
                 D: DeserializerTrait<'de>
             {
+                const __FIELDS: &[&Sym] = &[
+                    #( #field_const ),*
+                ];
+
                 struct __Visitor;
 
                 impl<'de> Visitor<'de> for __Visitor {
@@ -169,9 +245,11 @@ fn parse_fields(reciever: TypeReciever) -> proc_macro2::TokenStream {
                         while let Some(f) = _instance_variables.next_ivar()? {
                             match f.to_rust_field_name().unwrap_or(f).as_str() {
                                 #( #field_match ),*
-                                _ => {}
+                                #unknown_fields
                             }
                         }
+
+                        #default
 
                         Ok(#ty {
                             #( #instantiate_fields ),*
@@ -183,4 +261,8 @@ fn parse_fields(reciever: TypeReciever) -> proc_macro2::TokenStream {
             }
         }
     }
+}
+
+fn parse_enum(reciever: &TypeReciever, variants: &[VariantReciever]) -> proc_macro2::TokenStream {
+    todo!()
 }

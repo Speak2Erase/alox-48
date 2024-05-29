@@ -26,19 +26,19 @@ use crate::{
 pub struct Sym(pub(crate) str);
 
 impl Sym {
-    pub fn new(str: &str) -> &Self {
+    pub const fn new(str: &str) -> &Self {
         // SAFETY: Sym is just a wrapper of str and is repr(transparent) so they have identical layouts. This should be safe.
         //
         // double checked with miri.
         // as far as I am aware (especially since this is what the stdlib does) this is only way to convert to a dst like we want.
-        unsafe { &*(str as *const str as *const Sym) }
+        unsafe { std::mem::transmute(str) }
     }
 
-    pub fn as_str(&self) -> &str {
+    pub const fn as_str(&self) -> &str {
         &self.0
     }
 
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
 
@@ -54,7 +54,7 @@ impl Sym {
         self.to_owned()
     }
 
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.0.len()
     }
 }

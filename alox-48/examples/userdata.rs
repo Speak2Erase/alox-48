@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 use std::process::Command;
 
-#[derive(alox_48::Deserialize, alox_48::Serialize, Debug)]
+#[derive(alox_48::Deserialize, Debug)]
 #[marshal(from = "alox_48::Userdata")]
 struct Floats([f32; 3]);
 

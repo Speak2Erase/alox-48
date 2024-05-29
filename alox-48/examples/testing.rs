@@ -1,14 +1,14 @@
 #![allow(dead_code)]
 use std::{collections::HashMap, process::Command};
 
-#[derive(Debug, alox_48::Deserialize)]
-#[marshal(expecting = "An instance of MyClass")]
+#[derive(Debug, alox_48::Deserialize, Default)]
 struct MyClass {
+    #[marshal(default = "default_test")]
     test: Test,
     bool: bool,
 }
 
-#[derive(Debug, alox_48::Deserialize)]
+#[derive(Debug, alox_48::Deserialize, Default)]
 struct Test {
     map: HashMap<String, bool>,
 }
@@ -20,24 +20,15 @@ fn main() {
         .arg("-e")
         .arg(
             r#"
-class MyClass
-    def initialize()
-        @test = Test.new
-        @bool = true
-    end
-end
-
-class Test
-    def initialize()
-        @map = {
-            "test" => true
-        }
-    end
-end
-
-klass = MyClass.new
-puts Marshal.dump(klass)
-        "#,
+        class MyClass
+            def initialize()
+                @bool = true
+            end
+        end
+        
+        klass = MyClass.new
+        puts Marshal.dump(klass)
+      "#,
         )
         .output()
         .unwrap()
