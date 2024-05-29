@@ -24,7 +24,7 @@ pub use ser::Serializer;
 
 use crate::{
     rb_types::{Object, RbArray, RbFields, RbHash, RbString, Symbol, Userdata},
-    Instance,
+    Instance, RbStruct,
 };
 
 /// An enum representing any ruby value.
@@ -36,7 +36,7 @@ use crate::{
 ///
 /// Userdata/Object, for example, store the class name, which is not something that would normally be possible in serde.
 /// Symbols are preserved and deserialized as symbols.
-#[derive(Default, Clone, enum_as_inner::EnumAsInner)]
+#[derive(Default, Clone, enum_as_inner::EnumAsInner, Debug)]
 pub enum Value {
     /// A value equivalent to nil in ruby (or [`()`] in rust.)
     #[default]
@@ -65,6 +65,29 @@ pub enum Value {
     /// A generic ruby object.
     Object(Object),
     Instance(Instance<Box<Value>>),
+    Regex {
+        data: RbString,
+        flags: u8,
+    },
+    RbStruct(RbStruct),
+    Class(Symbol),
+    Module(Symbol),
+    Extended {
+        module: Symbol,
+        value: Box<Value>,
+    },
+    UserClass {
+        class: Symbol,
+        value: Box<Value>,
+    },
+    UserMarshal {
+        class: Symbol,
+        value: Box<Value>,
+    },
+    Data {
+        class: Symbol,
+        value: Box<Value>,
+    },
 }
 
 /// Interpret a `alox_48::Value` as an instance of type `T`.

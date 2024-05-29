@@ -74,7 +74,9 @@ mod value;
 pub use value::{from_value, to_value, Serializer as ValueSerializer, Value};
 
 mod rb_types;
-pub use rb_types::{Instance, Object, RbArray, RbFields, RbHash, RbString, Sym, Symbol, Userdata};
+pub use rb_types::{
+    Instance, Object, RbArray, RbFields, RbHash, RbString, RbStruct, Sym, Symbol, Userdata,
+};
 
 pub use de::{
     ArrayAccess, Deserialize, Deserializer, DeserializerTrait, Error as DeError, HashAccess,

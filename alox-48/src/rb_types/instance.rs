@@ -135,3 +135,17 @@ impl From<&str> for Instance<RbString> {
         }
     }
 }
+
+impl<T> std::hash::Hash for Instance<T>
+where
+    T: std::hash::Hash,
+{
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.value.hash(state);
+        self.fields.len().hash(state);
+        for (var, field) in &self.fields {
+            var.hash(state);
+            field.hash(state);
+        }
+    }
+}

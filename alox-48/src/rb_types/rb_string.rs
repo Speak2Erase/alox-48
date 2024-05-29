@@ -14,11 +14,10 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with alox-48.  If not, see <http://www.gnu.org/licenses/>.
-use super::RbFields;
 
 use crate::{
-    de::Result as DeResult, ser::Result as SerResult, Deserialize, DeserializerTrait, IvarAccess,
-    Serialize, SerializeIvars, SerializerTrait, Visitor,
+    de::Result as DeResult, ser::Result as SerResult, Deserialize, DeserializerTrait, Serialize,
+    SerializerTrait, Visitor,
 };
 
 /// A type equivalent to ruby's `String`.

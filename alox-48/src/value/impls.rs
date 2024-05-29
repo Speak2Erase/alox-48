@@ -16,36 +16,8 @@
 // along with alox-48.  If not, see <http://www.gnu.org/licenses/>.
 use super::{Object, RbArray, RbHash, RbString, Symbol, Userdata, Value};
 
-impl std::fmt::Debug for Value {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Value::Nil => f.write_str("nil"),
-            Value::Bool(b) => b.fmt(f),
-            Value::Float(n) => n.fmt(f),
-            Value::Integer(i) => i.fmt(f),
-            Value::String(s) => s.fmt(f),
-            Value::Symbol(s) => s.fmt(f),
-            Value::Array(a) => a.fmt(f),
-            Value::Object(o) => {
-                let mut d = f.debug_struct(o.class.as_str());
-
-                for (k, v) in &o.fields {
-                    d.field(k.as_str(), v);
-                }
-
-                d.finish()
-            }
-            Value::Hash(h) => h.fmt(f),
-            Value::Userdata(u) => f
-                .debug_struct(u.class.as_str())
-                .field("data", &u.data)
-                .finish(),
-            Value::Instance(i) => i.fmt(f),
-        }
-    }
-}
-
 impl PartialEq for Value {
+    #[allow(clippy::too_many_lines)]
     fn eq(&self, other: &Self) -> bool {
         match self {
             Value::Nil => other.is_nil(),
@@ -115,6 +87,82 @@ impl PartialEq for Value {
             Value::Instance(i) => {
                 if let Value::Instance(i2) = other {
                     i == i2
+                } else {
+                    false
+                }
+            }
+            Value::Regex { data, flags } => {
+                if let Value::Regex {
+                    data: data2,
+                    flags: flags2,
+                } = other
+                {
+                    data == data2 && flags == flags2
+                } else {
+                    false
+                }
+            }
+            Value::RbStruct(s) => {
+                if let Value::RbStruct(s2) = other {
+                    s == s2
+                } else {
+                    false
+                }
+            }
+            Value::Class(c) => {
+                if let Value::Class(c2) = other {
+                    c == c2
+                } else {
+                    false
+                }
+            }
+            Value::Module(m) => {
+                if let Value::Module(m2) = other {
+                    m == m2
+                } else {
+                    false
+                }
+            }
+            Value::Extended { module, value } => {
+                if let Value::Extended {
+                    module: module2,
+                    value: value2,
+                } = other
+                {
+                    module == module2 && value == value2
+                } else {
+                    false
+                }
+            }
+            Value::UserClass { class, value } => {
+                if let Value::UserClass {
+                    class: class2,
+                    value: value2,
+                } = other
+                {
+                    class == class2 && value == value2
+                } else {
+                    false
+                }
+            }
+            Value::UserMarshal { class, value } => {
+                if let Value::UserMarshal {
+                    class: class2,
+                    value: value2,
+                } = other
+                {
+                    class == class2 && value == value2
+                } else {
+                    false
+                }
+            }
+            Value::Data { class, value } => {
+                if let Value::Data {
+                    class: class2,
+                    value: value2,
+                } = other
+                {
+                    class == class2 && value == value2
                 } else {
                     false
                 }
@@ -231,6 +279,7 @@ impl Eq for Value {}
 
 impl std::hash::Hash for Value {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        std::mem::discriminant(self).hash(state);
         match self {
             Value::Nil => {}
             Value::Bool(b) => b.hash(state),
@@ -250,7 +299,24 @@ impl std::hash::Hash for Value {
             }
             Value::Object(o) => o.hash(state),
             Value::Userdata(u) => u.hash(state),
-            Value::Instance(i) => todo!(), // TODO
+            Value::Instance(i) => i.hash(state),
+            Value::Regex { data, flags } => {
+                data.data.hash(state);
+                flags.hash(state);
+            }
+            Value::RbStruct(s) => s.hash(state),
+            Value::Class(c) => c.hash(state),
+            Value::Module(m) => m.hash(state),
+            Value::Extended { module, value } => {
+                module.hash(state);
+                value.hash(state);
+            }
+            Value::UserClass { class, value }
+            | Value::UserMarshal { class, value }
+            | Value::Data { class, value } => {
+                class.hash(state);
+                value.hash(state);
+            }
         }
     }
 }

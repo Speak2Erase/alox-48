@@ -46,14 +46,15 @@ impl<'de> Visitor<'de> for ValueVisitor {
         Ok(Value::Float(v))
     }
 
-    fn visit_string(self, string: &'de [u8]) -> Result<Self::Value> {
-        Ok(Value::String(RbString {
-            data: string.to_vec(),
-        }))
-    }
-
-    fn visit_symbol(self, symbol: &'de Sym) -> Result<Self::Value> {
-        Ok(Value::Symbol(symbol.to_symbol()))
+    fn visit_hash<A>(self, mut map: A) -> Result<Self::Value>
+    where
+        A: HashAccess<'de>,
+    {
+        let mut hash = RbHash::with_capacity(map.len());
+        while let Some((k, v)) = map.next_entry()? {
+            hash.insert(k, v);
+        }
+        Ok(Value::Hash(hash))
     }
 
     fn visit_array<A>(self, mut access: A) -> Result<Self::Value>
@@ -67,22 +68,21 @@ impl<'de> Visitor<'de> for ValueVisitor {
         Ok(Value::Array(array))
     }
 
-    fn visit_hash<A>(self, mut map: A) -> Result<Self::Value>
-    where
-        A: HashAccess<'de>,
-    {
-        let mut hash = RbHash::with_capacity(map.len());
-        while let Some((k, v)) = map.next_entry()? {
-            hash.insert(k, v);
-        }
-        Ok(Value::Hash(hash))
+    fn visit_string(self, string: &'de [u8]) -> Result<Self::Value> {
+        Ok(Value::String(RbString {
+            data: string.to_vec(),
+        }))
     }
 
-    fn visit_user_data(self, class: &'de Sym, data: &'de [u8]) -> Result<Self::Value> {
-        Ok(Value::Userdata(Userdata {
-            class: class.to_symbol(),
-            data: data.to_vec(),
-        }))
+    fn visit_symbol(self, symbol: &'de Sym) -> Result<Self::Value> {
+        Ok(Value::Symbol(symbol.to_symbol()))
+    }
+
+    fn visit_regular_expression(self, data: &'de [u8], flags: u8) -> Result<Self::Value> {
+        Ok(Value::Regex {
+            data: RbString::from(data),
+            flags,
+        })
     }
 
     fn visit_object<A>(self, class: &'de Sym, mut instance_variables: A) -> Result<Self::Value>
@@ -97,6 +97,28 @@ impl<'de> Visitor<'de> for ValueVisitor {
             class: class.to_symbol(),
             fields,
         }))
+    }
+
+    fn visit_struct<A>(self, name: &'de Sym, mut members: A) -> Result<Self::Value>
+    where
+        A: IvarAccess<'de>,
+    {
+        let mut fields = RbFields::with_capacity(members.len());
+        while let Some((k, v)) = members.next_entry()? {
+            fields.insert(k.to_symbol(), v);
+        }
+        Ok(Value::RbStruct(crate::RbStruct {
+            class: name.to_symbol(),
+            fields,
+        }))
+    }
+
+    fn visit_class(self, class: &'de Sym) -> Result<Self::Value> {
+        Ok(Value::Class(class.to_symbol()))
+    }
+
+    fn visit_module(self, module: &'de Sym) -> Result<Self::Value> {
+        Ok(Value::Module(module.to_symbol()))
     }
 
     fn visit_instance<A>(self, instance: A) -> Result<Self::Value>
@@ -114,6 +136,57 @@ impl<'de> Visitor<'de> for ValueVisitor {
         };
 
         Ok(Value::Instance(instance))
+    }
+
+    fn visit_extended<D>(self, module: &'de Sym, deserializer: D) -> Result<Self::Value>
+    where
+        D: DeserializerTrait<'de>,
+    {
+        let value = deserializer.deserialize(ValueVisitor)?;
+        Ok(Value::Extended {
+            module: module.to_symbol(),
+            value: Box::new(value),
+        })
+    }
+
+    fn visit_user_class<D>(self, class: &'de Sym, deserializer: D) -> Result<Self::Value>
+    where
+        D: DeserializerTrait<'de>,
+    {
+        let value = deserializer.deserialize(ValueVisitor)?;
+        Ok(Value::UserClass {
+            class: class.to_symbol(),
+            value: Box::new(value),
+        })
+    }
+
+    fn visit_user_data(self, class: &'de Sym, data: &'de [u8]) -> Result<Self::Value> {
+        Ok(Value::Userdata(Userdata {
+            class: class.to_symbol(),
+            data: data.to_vec(),
+        }))
+    }
+
+    fn visit_user_marshal<D>(self, class: &'de Sym, deserializer: D) -> Result<Self::Value>
+    where
+        D: DeserializerTrait<'de>,
+    {
+        let value = deserializer.deserialize(ValueVisitor)?;
+        Ok(Value::UserMarshal {
+            class: class.to_symbol(),
+            value: Box::new(value),
+        })
+    }
+
+    fn visit_data<D>(self, class: &'de Sym, deserializer: D) -> Result<Self::Value>
+    where
+        D: DeserializerTrait<'de>,
+    {
+        let value = deserializer.deserialize(ValueVisitor)?;
+        Ok(Value::Data {
+            class: class.to_symbol(),
+            value: Box::new(value),
+        })
     }
 }
 
@@ -172,6 +245,22 @@ impl<'de> DeserializerTrait<'de> for &'de Value {
                 value: &i.value,
                 fields: &i.fields,
             }),
+            Value::Regex { data, flags } => visitor.visit_regular_expression(&data.data, *flags),
+            Value::RbStruct(s) => visitor.visit_struct(
+                &s.class,
+                ValueIVarAccess {
+                    fields: &s.fields,
+                    index: 0,
+                },
+            ),
+            Value::Class(c) => visitor.visit_class(c),
+            Value::Module(m) => visitor.visit_module(m),
+            Value::Extended { module, value } => visitor.visit_extended(module, value.as_ref()),
+            Value::UserClass { class, value } => visitor.visit_user_class(class, value.as_ref()),
+            Value::UserMarshal { class, value } => {
+                visitor.visit_user_marshal(class, value.as_ref())
+            }
+            Value::Data { class, value } => visitor.visit_data(class, value.as_ref()),
         }
     }
 

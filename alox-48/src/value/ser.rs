@@ -17,7 +17,7 @@
 use super::{Object, RbFields, RbHash, RbString, Symbol, Userdata, Value};
 use crate::{
     ser::{Error, Kind, Result, Serialize},
-    Instance, RbArray, SerializerTrait, Sym,
+    Instance, RbArray, RbStruct, SerializerTrait, Sym,
 };
 
 impl Serialize for Value {
@@ -37,6 +37,16 @@ impl Serialize for Value {
             Value::Userdata(d) => d.serialize(serializer),
             Value::Object(o) => o.serialize(serializer),
             Value::Instance(i) => i.serialize(serializer),
+            Value::RbStruct(s) => s.serialize(serializer),
+            Value::Class(c) => serializer.serialize_class(c),
+            Value::Module(m) => serializer.serialize_module(m),
+            Value::Extended { module, value } => serializer.serialize_extended(module, value),
+            Value::UserClass { class, value } => serializer.serialize_user_class(class, value),
+            Value::UserMarshal { class, value } => serializer.serialize_user_marshal(class, value),
+            Value::Data { class, value } => serializer.serialize_data(class, value),
+            Value::Regex { data, flags } => {
+                serializer.serialize_regular_expression(data.as_slice(), *flags)
+            }
         }
     }
 }
@@ -76,8 +86,8 @@ impl SerializerTrait for Serializer {
     type Ok = Value;
 
     type SerializeIvars = SerializeIvars;
-    type SerializeArray = SerializeArray;
     type SerializeHash = SerializeHash;
+    type SerializeArray = SerializeArray;
 
     fn serialize_nil(self) -> Result<Self::Ok> {
         Ok(Value::Nil)
@@ -116,8 +126,11 @@ impl SerializerTrait for Serializer {
         Ok(Value::Symbol(sym.to_symbol()))
     }
 
-    fn serialize_regular_expression(self, _regex: &[u8], _flags: u8) -> Result<Self::Ok> {
-        todo!()
+    fn serialize_regular_expression(self, regex: &[u8], flags: u8) -> Result<Self::Ok> {
+        Ok(Value::Regex {
+            data: RbString::from(regex),
+            flags,
+        })
     }
 
     fn serialize_object(self, class: &Sym, len: usize) -> Result<Self::SerializeIvars> {
@@ -136,12 +149,12 @@ impl SerializerTrait for Serializer {
         })
     }
 
-    fn serialize_class(self, _class: &Sym) -> Result<Self::Ok> {
-        todo!()
+    fn serialize_class(self, class: &Sym) -> Result<Self::Ok> {
+        Ok(Value::Class(class.to_symbol()))
     }
 
-    fn serialize_module(self, _module: &Sym) -> Result<Self::Ok> {
-        todo!()
+    fn serialize_module(self, module: &Sym) -> Result<Self::Ok> {
+        Ok(Value::Module(module.to_symbol()))
     }
 
     fn serialize_instance<V>(self, value: &V, len: usize) -> Result<Self::SerializeIvars>
@@ -156,18 +169,26 @@ impl SerializerTrait for Serializer {
         })
     }
 
-    fn serialize_extended<V>(self, _module: &Sym, _value: &V) -> Result<Self::Ok>
+    fn serialize_extended<V>(self, module: &Sym, value: &V) -> Result<Self::Ok>
     where
         V: Serialize + ?Sized,
     {
-        todo!()
+        let value = value.serialize(Serializer)?;
+        Ok(Value::Extended {
+            module: module.to_symbol(),
+            value: Box::new(value),
+        })
     }
 
-    fn serialize_user_class<V>(self, _class: &Sym, _value: &V) -> Result<Self::Ok>
+    fn serialize_user_class<V>(self, class: &Sym, value: &V) -> Result<Self::Ok>
     where
         V: Serialize + ?Sized,
     {
-        todo!()
+        let value = value.serialize(Serializer)?;
+        Ok(Value::UserClass {
+            class: class.to_symbol(),
+            value: Box::new(value),
+        })
     }
 
     fn serialize_user_data(self, class: &Sym, data: &[u8]) -> Result<Self::Ok> {
@@ -177,18 +198,26 @@ impl SerializerTrait for Serializer {
         }))
     }
 
-    fn serialize_user_marshal<V>(self, _class: &Sym, _value: &V) -> Result<Self::Ok>
+    fn serialize_user_marshal<V>(self, class: &Sym, value: &V) -> Result<Self::Ok>
     where
         V: Serialize + ?Sized,
     {
-        todo!()
+        let value = value.serialize(Serializer)?;
+        Ok(Value::UserMarshal {
+            class: class.to_symbol(),
+            value: Box::new(value),
+        })
     }
 
-    fn serialize_data<V>(self, _class: &Sym, _value: &V) -> Result<Self::Ok>
+    fn serialize_data<V>(self, class: &Sym, value: &V) -> Result<Self::Ok>
     where
         V: Serialize + ?Sized,
     {
-        todo!()
+        let value = value.serialize(Serializer)?;
+        Ok(Value::Data {
+            class: class.to_symbol(),
+            value: Box::new(value),
+        })
     }
 }
 
@@ -221,10 +250,13 @@ impl crate::SerializeIvars for SerializeIvars {
                 fields: self.fields,
             })),
             SerializeIvarsValue::Instance(value) => Ok(Value::Instance(Instance {
-                fields: self.fields,
                 value: Box::new(value),
+                fields: self.fields,
             })),
-            SerializeIvarsValue::Struct(_) => todo!(),
+            SerializeIvarsValue::Struct(class) => Ok(Value::RbStruct(RbStruct {
+                class,
+                fields: self.fields,
+            })),
         }
     }
 }
