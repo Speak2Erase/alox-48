@@ -2,15 +2,7 @@
 use std::process::Command;
 
 #[derive(alox_48::Deserialize, Debug)]
-#[marshal(from = "alox_48::Userdata")]
 struct Floats([f32; 3]);
-
-impl From<alox_48::Userdata> for Floats {
-    fn from(value: alox_48::Userdata) -> Self {
-        let floats = bytemuck::cast_slice(&value.data);
-        Self(std::array::from_fn(|i| floats[i]))
-    }
-}
 
 fn main() {
     color_eyre::install().unwrap();
@@ -19,13 +11,14 @@ fn main() {
         .arg("-e")
         .arg(
             r#"
-            class MyClass
-                def _dump(_)
-                    [15.0, 12.0, 13.0].pack('F*')
-                end
+            class MyClass < Array
             end
             
-            puts Marshal.dump(MyClass.new)
+            inst = MyClass.new
+            inst << 15.0
+            inst << 12.0
+            inst << 13.0
+            puts Marshal.dump(inst)
         "#,
         )
         .output()

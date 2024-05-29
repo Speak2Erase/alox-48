@@ -140,18 +140,18 @@ fn parse_struct(
     reciever: &TypeReciever,
     fields: &darling::ast::Fields<FieldReciever>,
 ) -> TokenStream {
-    let ty = reciever.ident.clone();
-
     // handle tuple and newtype structs
     if let Some(field) = fields.iter().next() {
         if field.ident.is_none() && fields.len() > 1 {
             return quote! {
-                compile_error!("Derive macro does not currently support tuple structs!")
+                compile_error!("Derive macro does not currently automatic deserialize impls for tuple structs!")
             };
         } else if field.ident.is_none() {
             return parse_newtype_struct(reciever, field);
         }
     }
+
+    let ty = reciever.ident.clone();
 
     let (field_const, field_lets, field_match, instantiate_fields): ParseUnpack = fields
         .iter()
@@ -231,7 +231,45 @@ fn parse_struct(
 }
 
 fn parse_newtype_struct(reciever: &TypeReciever, field: &FieldReciever) -> TokenStream {
-    todo!()
+    let ty = reciever.ident.clone();
+
+    let expecting_text = reciever.expecting.clone().unwrap_or_else(|| {
+        format!(
+            "an instance of {}",
+            reciever.class.clone().unwrap_or_else(|| ty.to_string())
+        )
+    });
+    let expecting_lit = LitStr::new(&expecting_text, ty.span());
+
+    quote! {
+        #[automatically_derived]
+        impl<'de> Deserialize<'de> for #ty {
+            fn deserialize<D>(deserializer: D) -> Result<Self, DeError>
+            where
+                D: DeserializerTrait<'de>
+            {
+
+                struct __Visitor;
+
+                impl<'de> Visitor<'de> for __Visitor {
+                    type Value = #ty;
+
+                    fn visit_user_class<D>(self, _class: &'de Sym, deserializer: D) -> Result<Self::Value, DeError>
+                    where
+                        D: DeserializerTrait<'de>
+                    {
+                        Ok(#ty(Deserialize::deserialize(deserializer)?))
+                    }
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        formatter.write_str(#expecting_lit)
+                    }
+                }
+
+                deserializer.deserialize(__Visitor)
+            }
+        }
+    }
 }
 
 type ParseTuple<T> = (
