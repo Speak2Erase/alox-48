@@ -518,6 +518,36 @@ impl<'de, 'a> super::DeserializerTrait<'de> for &'a mut Deserializer<'de> {
             visitor.visit_some(self)
         }
     }
+
+    fn deserialize_instance<V>(self, visitor: V) -> Result<V::Value>
+    where
+        V: super::traits::VisitorInstance<'de>,
+    {
+        if self.cursor.peek_tag()? == Tag::Instance {
+            self.cursor.next_byte()?;
+
+            let mut len = 0;
+            let mut index = 0;
+
+            let result = visitor.visit_instance(&mut InstanceAccess {
+                deserializer: &mut *self,
+                len: &mut len,
+                index: &mut index,
+            })?;
+
+            while index < len {
+                index += 1;
+                // Ivar
+                self.read_symbol_either()?;
+                // Value
+                Ignored::deserialize(&mut *self)?;
+            }
+
+            Ok(result)
+        } else {
+            visitor.visit(self)
+        }
+    }
 }
 
 impl<'de, 'a> super::InstanceAccess<'de> for &'a mut InstanceAccess<'de, 'a> {
@@ -528,6 +558,25 @@ impl<'de, 'a> super::InstanceAccess<'de> for &'a mut InstanceAccess<'de, 'a> {
         V: Visitor<'de>,
     {
         let result = self.deserializer.deserialize(visitor)?;
+
+        let len = self.deserializer.read_usize()?;
+        *self.len = len;
+
+        Ok((
+            result,
+            IvarAccess {
+                deserializer: &mut *self.deserializer,
+                len,
+                index: self.index,
+            },
+        ))
+    }
+
+    fn value_deserialize<T>(self) -> Result<(T, Self::IvarAccess)>
+    where
+        T: Deserialize<'de>,
+    {
+        let result = T::deserialize(&mut *self.deserializer)?;
 
         let len = self.deserializer.read_usize()?;
         *self.len = len;

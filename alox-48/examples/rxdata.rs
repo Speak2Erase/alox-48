@@ -5,7 +5,7 @@ mod rmxp_structs;
 fn main() {
     color_eyre::install().unwrap();
 
-    let bytes = std::fs::read("alox-48/examples/Map001.rxdata").unwrap();
+    let bytes = std::fs::read("alox-48/examples/Map223.rxdata").unwrap();
 
     println!("{}", pretty_hex::pretty_hex(&bytes));
 

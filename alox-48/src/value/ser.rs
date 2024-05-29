@@ -16,12 +16,12 @@
 // along with Luminol.  If not, see <http://www.gnu.org/licenses/>.
 use super::{Object, RbFields, RbHash, RbString, Symbol, Userdata, Value};
 use crate::{
-    ser::{Error, Kind, Result, Result as SerResult, Serialize},
-    RbArray, SerializerTrait, Sym,
+    ser::{Error, Kind, Result, Serialize},
+    Instance, RbArray, SerializerTrait, Sym,
 };
 
 impl Serialize for Value {
-    fn serialize<S>(&self, serializer: S) -> SerResult<S::Ok>
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok>
     where
         S: SerializerTrait,
     {
@@ -36,6 +36,7 @@ impl Serialize for Value {
             Value::Hash(h) => h.serialize(serializer),
             Value::Userdata(d) => d.serialize(serializer),
             Value::Object(o) => o.serialize(serializer),
+            Value::Instance(i) => i.serialize(serializer),
         }
     }
 }
@@ -108,7 +109,6 @@ impl SerializerTrait for Serializer {
     fn serialize_string(self, data: &[u8]) -> Result<Self::Ok> {
         Ok(Value::String(RbString {
             data: data.to_vec(),
-            fields: RbFields::new(),
         }))
     }
 
@@ -220,7 +220,10 @@ impl crate::SerializeIvars for SerializeIvars {
                 class,
                 fields: self.fields,
             })),
-            SerializeIvarsValue::Instance(_) => todo!(),
+            SerializeIvarsValue::Instance(value) => Ok(Value::Instance(Instance {
+                fields: self.fields,
+                value: Box::new(value),
+            })),
             SerializeIvarsValue::Struct(_) => todo!(),
         }
     }

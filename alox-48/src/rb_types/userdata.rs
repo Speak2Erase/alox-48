@@ -23,8 +23,8 @@ use crate::{
 /// Its main intended use is in [`Value`], but you can also use it with [`serde::Deserialize`]:
 ///
 /// ```
-/// #[derive(serde::Deserialize, Debug, PartialEq, Eq)]
-/// #[serde(from = "alox_48::Userdata")]
+/// #[derive(alox_48::Deserialize, Debug, PartialEq, Eq)]
+/// #[marshal(from = "alox_48::Userdata")]
 /// struct MyUserData {
 ///     field: [char; 4],
 /// }

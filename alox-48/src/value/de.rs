@@ -15,8 +15,10 @@
 // You should have received a copy of the GNU General Public License
 // along with alox-48.  If not, see <http://www.gnu.org/licenses/>.
 use crate::{
-    de::Error, de::Result, ArrayAccess, Deserialize, DeserializerTrait, HashAccess, InstanceAccess,
-    IvarAccess, Object, RbFields, RbHash, RbString, Sym, Userdata, Value, Visitor, VisitorOption,
+    de::{Error, Result},
+    ArrayAccess, Deserialize, DeserializerTrait, HashAccess, Instance, InstanceAccess, IvarAccess,
+    Object, RbFields, RbHash, RbString, Sym, Userdata, Value, Visitor, VisitorInstance,
+    VisitorOption,
 };
 
 struct ValueVisitor;
@@ -47,7 +49,6 @@ impl<'de> Visitor<'de> for ValueVisitor {
     fn visit_string(self, string: &'de [u8]) -> Result<Self::Value> {
         Ok(Value::String(RbString {
             data: string.to_vec(),
-            fields: RbFields::new(),
         }))
     }
 
@@ -102,14 +103,17 @@ impl<'de> Visitor<'de> for ValueVisitor {
     where
         A: InstanceAccess<'de>,
     {
-        let (mut value, mut instance_fields) = instance.value(ValueVisitor)?;
-        if let Value::String(RbString { fields, .. }) = &mut value {
-            fields.reserve(instance_fields.len());
-            while let Some((k, v)) = instance_fields.next_entry()? {
-                fields.insert(k.to_symbol(), v);
-            }
+        let (value, mut instance_fields) = instance.value(ValueVisitor)?;
+        let mut fields = RbFields::with_capacity(instance_fields.len());
+        while let Some((field, value)) = instance_fields.next_entry()? {
+            fields.insert(field.to_symbol(), value);
         }
-        Ok(value)
+        let instance = Instance {
+            value: Box::new(value),
+            fields,
+        };
+
+        Ok(Value::Instance(instance))
     }
 }
 
@@ -122,11 +126,9 @@ impl<'de> Deserialize<'de> for Value {
     }
 }
 
-enum ValueInstanceAccess<'de> {
-    String {
-        string: &'de [u8],
-        fields: &'de RbFields,
-    },
+struct ValueInstanceAccess<'de> {
+    value: &'de Value,
+    fields: &'de RbFields,
 }
 
 struct ValueIVarAccess<'de> {
@@ -154,16 +156,7 @@ impl<'de> DeserializerTrait<'de> for &'de Value {
             Value::Bool(v) => visitor.visit_bool(*v),
             Value::Float(f) => visitor.visit_f64(*f),
             Value::Integer(i) => visitor.visit_i32(*i),
-            Value::String(s) => {
-                if s.fields.is_empty() {
-                    visitor.visit_string(s.data.as_slice())
-                } else {
-                    visitor.visit_instance(ValueInstanceAccess::String {
-                        string: &s.data,
-                        fields: &s.fields,
-                    })
-                }
-            }
+            Value::String(s) => visitor.visit_string(&s.data),
             Value::Symbol(s) => visitor.visit_symbol(s),
             Value::Array(array) => visitor.visit_array(ValueArrayAccess { array, index: 0 }),
             Value::Hash(hash) => visitor.visit_hash(ValueHashAccess { hash, index: 0 }),
@@ -175,6 +168,10 @@ impl<'de> DeserializerTrait<'de> for &'de Value {
                     index: 0,
                 },
             ),
+            Value::Instance(i) => visitor.visit_instance(ValueInstanceAccess {
+                value: &i.value,
+                fields: &i.fields,
+            }),
         }
     }
 
@@ -188,6 +185,20 @@ impl<'de> DeserializerTrait<'de> for &'de Value {
             visitor.visit_some(self)
         }
     }
+
+    fn deserialize_instance<V>(self, visitor: V) -> Result<V::Value>
+    where
+        V: VisitorInstance<'de>,
+    {
+        if let Value::Instance(i) = self {
+            visitor.visit_instance(ValueInstanceAccess {
+                value: &i.value,
+                fields: &i.fields,
+            })
+        } else {
+            visitor.visit(self)
+        }
+    }
 }
 
 impl<'de> InstanceAccess<'de> for ValueInstanceAccess<'de> {
@@ -197,12 +208,24 @@ impl<'de> InstanceAccess<'de> for ValueInstanceAccess<'de> {
     where
         V: Visitor<'de>,
     {
-        match self {
-            Self::String { string, fields } => {
-                let value = visitor.visit_string(string)?;
-                Ok((value, ValueIVarAccess { fields, index: 0 }))
-            }
-        }
+        let value = self.value.deserialize(visitor)?;
+        let access = ValueIVarAccess {
+            fields: self.fields,
+            index: 0,
+        };
+        Ok((value, access))
+    }
+
+    fn value_deserialize<T>(self) -> Result<(T, Self::IvarAccess)>
+    where
+        T: Deserialize<'de>,
+    {
+        let value = T::deserialize(self.value)?;
+        let access = ValueIVarAccess {
+            fields: self.fields,
+            index: 0,
+        };
+        Ok((value, access))
     }
 }
 

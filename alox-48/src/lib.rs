@@ -74,11 +74,11 @@ mod value;
 pub use value::{from_value, to_value, Serializer as ValueSerializer, Value};
 
 mod rb_types;
-pub use rb_types::{Object, RbArray, RbFields, RbHash, RbString, Sym, Symbol, Userdata};
+pub use rb_types::{Instance, Object, RbArray, RbFields, RbHash, RbString, Sym, Symbol, Userdata};
 
 pub use de::{
     ArrayAccess, Deserialize, Deserializer, DeserializerTrait, Error as DeError, HashAccess,
-    InstanceAccess, IvarAccess, Result as DeResult, Visitor, VisitorOption,
+    InstanceAccess, IvarAccess, Result as DeResult, Visitor, VisitorInstance, VisitorOption,
 };
 pub use ser::{
     Error as SerError, Result as SerResult, Serialize, SerializeArray, SerializeHash,
@@ -192,7 +192,7 @@ mod strings {
             0x22, 0x09, 0x42, 0x69, 0x67, 0x35,
         ];
 
-        let str: crate::RbString = crate::from_bytes(bytes).unwrap();
+        let str: crate::Instance<crate::RbString> = crate::from_bytes(bytes).unwrap();
 
         assert_eq!(
             str.encoding().unwrap().as_string().unwrap().data, // this is a mess lol, i should fix it
@@ -208,7 +208,7 @@ mod strings {
             0x22, 0x09, 0x42, 0x69, 0x67, 0x35,
         ];
 
-        let str: crate::RbString = crate::from_bytes(bytes).unwrap();
+        let str: crate::Instance<crate::RbString> = crate::from_bytes(bytes).unwrap();
 
         let bytes2 = crate::to_bytes(&str).unwrap();
 
@@ -392,6 +392,37 @@ mod value_test {
 
         assert_eq!(obj.class, "Test");
         assert_eq!(obj.fields["@field1"], true);
+    }
+
+    #[test]
+    fn untyped_ivar_string() {
+        let bytes = &[
+            0x04, 0x08, 0x49, 0x22, 0x0b, 0x68, 0x65, 0x6c, 0x6c, 0x6f, 0x21, 0x07, 0x3a, 0x06,
+            0x45, 0x54, 0x3a, 0x0c, 0x40, 0x72, 0x61, 0x6e, 0x64, 0x6f, 0x6d, 0x69, 0x01, 0x7b,
+        ];
+
+        let obj: crate::Value = crate::from_bytes(bytes).unwrap();
+        let instance = obj.into_instance().unwrap();
+
+        assert_eq!(instance.value.as_ref(), "hello!");
+        assert_eq!(instance.fields["@random"], 123);
+    }
+
+    #[test]
+    fn untyped_ivar_array() {
+        let bytes = &[
+            0x04, 0x08, 0x49, 0x5b, 0x07, 0x49, 0x22, 0x09, 0x74, 0x65, 0x73, 0x74, 0x06, 0x3a,
+            0x06, 0x45, 0x54, 0x69, 0x01, 0x7b, 0x06, 0x3a, 0x0a, 0x40, 0x69, 0x76, 0x61, 0x72,
+            0x66, 0x06, 0x35,
+        ];
+
+        let obj: crate::Value = crate::from_bytes(bytes).unwrap();
+        let instance = obj.into_instance().unwrap();
+
+        let array = instance.value.as_array().unwrap();
+        assert_eq!(&array[0], "test");
+        assert_eq!(array[1], 123);
+        assert_eq!(instance.fields["@ivar"], 5.0);
     }
 
     #[test]

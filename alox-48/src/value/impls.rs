@@ -23,7 +23,7 @@ impl std::fmt::Debug for Value {
             Value::Bool(b) => b.fmt(f),
             Value::Float(n) => n.fmt(f),
             Value::Integer(i) => i.fmt(f),
-            Value::String(s) => f.write_fmt(format_args!("{:?}", s.to_string_lossy())),
+            Value::String(s) => s.fmt(f),
             Value::Symbol(s) => s.fmt(f),
             Value::Array(a) => a.fmt(f),
             Value::Object(o) => {
@@ -40,6 +40,7 @@ impl std::fmt::Debug for Value {
                 .debug_struct(u.class.as_str())
                 .field("data", &u.data)
                 .finish(),
+            Value::Instance(i) => i.fmt(f),
         }
     }
 }
@@ -111,6 +112,13 @@ impl PartialEq for Value {
                     false
                 }
             }
+            Value::Instance(i) => {
+                if let Value::Instance(i2) = other {
+                    i == i2
+                } else {
+                    false
+                }
+            }
         }
     }
 }
@@ -147,6 +155,7 @@ impl PartialEq<String> for Value {
         match self {
             Value::String(v) => other.as_bytes() == v.as_slice(),
             Value::Symbol(v) => other.as_str() == v.as_str(),
+            Value::Instance(i) => i.value.as_ref() == other,
             _ => false,
         }
     }
@@ -157,6 +166,7 @@ impl PartialEq<str> for Value {
         match self {
             Value::String(v) => other.as_bytes() == v.as_slice(),
             Value::Symbol(v) => other == v.as_str(),
+            Value::Instance(i) => i.value.as_ref() == other,
             _ => false,
         }
     }
@@ -240,6 +250,7 @@ impl std::hash::Hash for Value {
             }
             Value::Object(o) => o.hash(state),
             Value::Userdata(u) => u.hash(state),
+            Value::Instance(i) => todo!(), // TODO
         }
     }
 }

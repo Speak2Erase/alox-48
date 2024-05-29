@@ -17,12 +17,14 @@
 use super::Value;
 use indexmap::IndexMap;
 
+mod instance;
 mod object;
 mod rb_string;
 mod sym;
 mod symbol;
 mod userdata;
 
+pub use instance::Instance;
 pub use object::Object;
 pub use rb_string::RbString;
 pub use sym::Sym;

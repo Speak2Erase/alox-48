@@ -15,16 +15,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Luminol.  If not, see <http://www.gnu.org/licenses/>.
 
-use super::{Object, RbFields, RbHash, RbString, Symbol, Userdata, Value};
+use crate::Instance;
 
-macro_rules! utf8_enc {
-    () => {{
-        let mut f = RbFields::new();
-        f.insert("E".into(), true.into());
-
-        f
-    }};
-}
+use super::{Object, RbHash, RbString, Symbol, Userdata, Value};
 
 impl Value {
     /// Convert a symbol into a value.
@@ -48,22 +41,17 @@ where
 
 impl From<String> for Value {
     fn from(value: String) -> Self {
-        let fields = utf8_enc!();
-
+        // FIXME should these use instance?
         Value::String(RbString {
             data: value.into_bytes(),
-            fields,
         })
     }
 }
 
 impl From<&str> for Value {
     fn from(value: &str) -> Self {
-        let fields = utf8_enc!();
-
         Value::String(RbString {
             data: value.to_string().into_bytes(),
-            fields,
         })
     }
 }
@@ -169,5 +157,18 @@ impl From<Value> for bool {
             Value::Bool(b) => b,
             _ => true,
         }
+    }
+}
+
+impl<T> From<Instance<T>> for Value
+where
+    T: Into<Value>,
+{
+    fn from(instance: Instance<T>) -> Self {
+        let value = Box::new(instance.value.into());
+        Value::Instance(Instance {
+            value,
+            fields: instance.fields,
+        })
     }
 }

@@ -23,25 +23,14 @@ use crate::{
 
 /// A type equivalent to ruby's `String`.
 /// ruby strings do not have to be utf8 encoded, so this type uses [`Vec<u8>`] instead.
-///
-/// ruby strings also can have attached extra fields (usually just the encoding), and this struct is no exception.
-/// An [`RbString`] constructed from a rust [`String`] will always have the field `:E` set to true, which is how
-/// ruby denotes that a string is utf8.
 #[derive(PartialEq, Eq, Default, Clone)]
 pub struct RbString {
     /// The data of this string.
     pub data: Vec<u8>,
-    /// Extra fields associated with this string.
-    pub fields: RbFields,
 }
 
 #[allow(clippy::must_use_candidate)]
 impl RbString {
-    /// Return the encoding of this string, if it has one.
-    pub fn encoding(&self) -> Option<&crate::Value> {
-        self.fields.get("E").or_else(|| self.fields.get("encoding"))
-    }
-
     /// Uses [`String::from_utf8_lossy`] to convert this string to rust string in a lossy manner.
     pub fn to_string_lossy(&self) -> std::borrow::Cow<'_, str> {
         String::from_utf8_lossy(&self.data)
@@ -69,18 +58,12 @@ impl RbString {
     pub fn as_slice(&self) -> &[u8] {
         &self.data
     }
-
-    /// Splits this string into its constituants.
-    pub fn into_parts(self) -> (Vec<u8>, RbFields) {
-        (self.data, self.fields)
-    }
 }
 
 impl std::fmt::Debug for RbString {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("RbString")
             .field("data", &self.to_string_lossy())
-            .field("fields", &self.fields)
             .finish()
     }
 }
@@ -112,33 +95,18 @@ impl std::borrow::BorrowMut<[u8]> for RbString {
     }
 }
 
-macro_rules! utf8_enc {
-    () => {{
-        let mut f = RbFields::new();
-        f.insert("E".into(), true.into());
-
-        f
-    }};
-}
-
 impl From<&str> for RbString {
     fn from(value: &str) -> Self {
-        let fields = utf8_enc!();
-
         Self {
             data: value.as_bytes().to_vec(),
-            fields,
         }
     }
 }
 
 impl From<String> for RbString {
     fn from(value: String) -> Self {
-        let fields = utf8_enc!();
-
         Self {
             data: value.into_bytes(),
-            fields,
         }
     }
 }
@@ -147,17 +115,13 @@ impl From<&[u8]> for RbString {
     fn from(value: &[u8]) -> Self {
         Self {
             data: value.to_vec(),
-            fields: indexmap::IndexMap::default(),
         }
     }
 }
 
 impl From<Vec<u8>> for RbString {
     fn from(value: Vec<u8>) -> Self {
-        Self {
-            data: value,
-            fields: indexmap::IndexMap::default(),
-        }
+        Self { data: value }
     }
 }
 
@@ -187,24 +151,6 @@ impl<'de> Visitor<'de> for StringVisitor {
     fn visit_string(self, string: &'de [u8]) -> DeResult<Self::Value> {
         Ok(RbString {
             data: string.to_vec(),
-            fields: RbFields::new(),
-        })
-    }
-
-    fn visit_instance<A>(self, instance: A) -> DeResult<Self::Value>
-    where
-        A: crate::de::InstanceAccess<'de>,
-    {
-        let (data, mut ivar) = instance.value(BytesVisitor)?;
-
-        let mut fields = RbFields::with_capacity(ivar.len());
-        while let Some((k, v)) = ivar.next_entry()? {
-            fields.insert(k.to_symbol(), v);
-        }
-
-        Ok(RbString {
-            data: data.to_vec(),
-            fields,
         })
     }
 }
@@ -218,32 +164,11 @@ impl<'de> Deserialize<'de> for RbString {
     }
 }
 
-struct SerializeBytes<'a>(&'a [u8]);
-
-impl<'a> Serialize for SerializeBytes<'a> {
-    fn serialize<S>(&self, serializer: S) -> SerResult<S::Ok>
-    where
-        S: SerializerTrait,
-    {
-        serializer.serialize_string(self.0)
-    }
-}
-
 impl Serialize for RbString {
     fn serialize<S>(&self, serializer: S) -> SerResult<S::Ok>
     where
         S: SerializerTrait,
     {
-        if self.fields.is_empty() {
-            serializer.serialize_string(&self.data)
-        } else {
-            // if we just passed the data as is it'd be serialized as a byte array!
-            let mut ivars =
-                serializer.serialize_instance(&SerializeBytes(&self.data), self.fields.len())?;
-            for (k, v) in &self.fields {
-                ivars.serialize_entry(k, v)?;
-            }
-            ivars.end()
-        }
+        serializer.serialize_string(&self.data)
     }
 }

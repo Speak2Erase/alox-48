@@ -483,3 +483,16 @@ map_impl!(
     map,
     IndexMap::with_capacity_and_hasher(map.len(), H::default())
 );
+
+impl<'de, T> Deserialize<'de> for Box<T>
+where
+    T: Deserialize<'de>,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self>
+    where
+        D: DeserializerTrait<'de>,
+    {
+        let value = T::deserialize(deserializer)?;
+        Ok(Box::new(value))
+    }
+}

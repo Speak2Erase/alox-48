@@ -22,7 +22,10 @@ mod ser;
 
 pub use ser::Serializer;
 
-use crate::rb_types::{Object, RbArray, RbFields, RbHash, RbString, Symbol, Userdata};
+use crate::{
+    rb_types::{Object, RbArray, RbFields, RbHash, RbString, Symbol, Userdata},
+    Instance,
+};
 
 /// An enum representing any ruby value.
 /// Similar to `serde_json::Value`, although much more nuanced.
@@ -61,6 +64,7 @@ pub enum Value {
     Userdata(Userdata),
     /// A generic ruby object.
     Object(Object),
+    Instance(Instance<Box<Value>>),
 }
 
 /// Interpret a `alox_48::Value` as an instance of type `T`.
@@ -68,12 +72,12 @@ pub enum Value {
 /// # Example
 ///
 /// ```
-/// use serde::Deserialize;
+/// use alox_48::Deserialize;
 ///
 /// #[derive(Deserialize, Debug, PartialEq)]
-/// struct User<'data> {
-///     fingerprint: &'data str,
-///     location:  &'data str,
+/// struct User {
+///     fingerprint: String,
+///     location: String,
 /// }
 ///
 ///
@@ -82,8 +86,8 @@ pub enum Value {
 /// object.fields.insert("location".into(), alox_48::RbString::from("Menlo Park, CA").into());
 /// let value = alox_48::Value::Object(object);
 ///
-/// let u: User = alox_48::value::from_value(&value).unwrap();
-/// assert_eq!(u, User { fingerprint: "0xF9BA143B95FF6D82", location: "Menlo Park, CA" });
+/// let u: User = alox_48::from_value(&value).unwrap();
+/// assert_eq!(u, User { fingerprint: "0xF9BA143B95FF6D82".to_string(), location: "Menlo Park, CA".to_string() });
 ///
 /// ```
 ///
@@ -103,21 +107,21 @@ where
 /// # Example
 ///
 /// ```
-/// use serde::Serialize;
+/// use alox_48::Serialize;
 ///
 /// #[derive(Serialize, Debug, PartialEq)]
-/// struct User<'data> {
-///     fingerprint: &'data str,
-///     location:  &'data str,
+/// struct User {
+///     fingerprint: String,
+///     location:  String,
 /// }
 ///
 ///
 /// let mut object = alox_48::Object { class: "User".into(), ..Default::default() };
-/// object.fields.insert("fingerprint".into(), alox_48::RbString::from("0xF9BA143B95FF6D82").into());
-/// object.fields.insert("location".into(), alox_48::RbString::from("Menlo Park, CA").into());
+/// object.fields.insert("@fingerprint".into(), alox_48::Instance::from("0xF9BA143B95FF6D82").into());
+/// object.fields.insert("@location".into(), alox_48::Instance::from("Menlo Park, CA").into());
 /// let original = alox_48::Value::Object(object);
 ///
-/// let value = alox_48::value::to_value(User { fingerprint: "0xF9BA143B95FF6D82", location: "Menlo Park, CA" }).unwrap();
+/// let value = alox_48::to_value(User { fingerprint: "0xF9BA143B95FF6D82".to_string(), location: "Menlo Park, CA".to_string() }).unwrap();
 /// assert_eq!(original, value);
 ///
 /// ```

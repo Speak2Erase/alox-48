@@ -31,6 +31,10 @@ pub trait Deserializer<'de>: Sized {
     fn deserialize_option<V>(self, visitor: V) -> Result<V::Value>
     where
         V: VisitorOption<'de>;
+
+    fn deserialize_instance<V>(self, visitor: V) -> Result<V::Value>
+    where
+        V: VisitorInstance<'de>;
 }
 
 pub trait Visitor<'de>: Sized {
@@ -148,12 +152,28 @@ pub trait VisitorOption<'de> {
         D: Deserializer<'de>;
 }
 
+pub trait VisitorInstance<'de> {
+    type Value;
+
+    fn visit<D>(self, deserializer: D) -> Result<Self::Value>
+    where
+        D: Deserializer<'de>;
+
+    fn visit_instance<A>(self, access: A) -> Result<Self::Value>
+    where
+        A: InstanceAccess<'de>;
+}
+
 pub trait InstanceAccess<'de>: Sized {
     type IvarAccess: IvarAccess<'de>;
 
     fn value<V>(self, visitor: V) -> Result<(V::Value, Self::IvarAccess)>
     where
         V: Visitor<'de>;
+
+    fn value_deserialize<T>(self) -> Result<(T, Self::IvarAccess)>
+    where
+        T: Deserialize<'de>;
 }
 
 pub trait IvarAccess<'de> {
