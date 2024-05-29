@@ -2,6 +2,7 @@
 use std::process::Command;
 
 #[derive(alox_48::Deserialize, Debug)]
+#[marshal(enforce_class)]
 struct Floats([f32; 3]);
 
 fn main() {

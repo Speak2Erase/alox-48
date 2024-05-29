@@ -33,6 +33,7 @@ struct TypeReciever {
 
     class: Option<String>,
     deny_unknown_fields: Flag,
+    enforce_class: Flag,
     #[darling(rename = "default")]
     default_fn: Option<Override<Path>>,
     #[darling(rename = "from")]
@@ -141,14 +142,14 @@ fn parse_struct(
     fields: &darling::ast::Fields<FieldReciever>,
 ) -> TokenStream {
     // handle tuple and newtype structs
-    if let Some(field) = fields.iter().next() {
-        if field.ident.is_none() && fields.len() > 1 {
-            return quote! {
+    if fields.iter().next().is_some_and(|f| f.ident.is_none()) {
+        return if fields.len() > 1 {
+            quote! {
                 compile_error!("Derive macro does not currently automatic deserialize impls for tuple structs!")
-            };
-        } else if field.ident.is_none() {
-            return parse_newtype_struct(reciever, field);
-        }
+            }
+        } else {
+            parse_newtype_struct(reciever)
+        };
     }
 
     let ty = reciever.ident.clone();
@@ -157,6 +158,18 @@ fn parse_struct(
         .iter()
         .map(|field| parse_field(reciever.default_fn.is_some(), field))
         .multiunzip();
+
+    let classname = reciever.class.clone().unwrap_or_else(|| ty.to_string());
+    let enforce_class = if reciever.enforce_class.is_present() {
+        let classname_lit = LitStr::new(&classname, ty.span());
+        quote! {
+            if class != Sym::new(#classname_lit) {
+                return Err(DeError::invalid_type(Unexpected::Class(class), &self));
+            }
+        }
+    } else {
+        quote! {}
+    };
 
     let unknown_fields = if reciever.deny_unknown_fields.is_present() {
         quote! {
@@ -175,12 +188,10 @@ fn parse_struct(
         }
     });
 
-    let expecting_text = reciever.expecting.clone().unwrap_or_else(|| {
-        format!(
-            "an instance of {}",
-            reciever.class.clone().unwrap_or_else(|| ty.to_string())
-        )
-    });
+    let expecting_text = reciever
+        .expecting
+        .clone()
+        .unwrap_or_else(|| format!("an instance of {classname}",));
     let expecting_lit = LitStr::new(&expecting_text, ty.span());
 
     quote! {
@@ -207,6 +218,8 @@ fn parse_struct(
                     where
                         A: IvarAccess<'de>,
                     {
+                        #enforce_class
+
                         #( #field_lets );*
 
                         while let Some(f) = _instance_variables.next_ivar()? {
@@ -230,15 +243,25 @@ fn parse_struct(
     }
 }
 
-fn parse_newtype_struct(reciever: &TypeReciever, field: &FieldReciever) -> TokenStream {
+fn parse_newtype_struct(reciever: &TypeReciever) -> TokenStream {
     let ty = reciever.ident.clone();
 
-    let expecting_text = reciever.expecting.clone().unwrap_or_else(|| {
-        format!(
-            "an instance of {}",
-            reciever.class.clone().unwrap_or_else(|| ty.to_string())
-        )
-    });
+    let classname = reciever.class.clone().unwrap_or_else(|| ty.to_string());
+    let enforce_class = if reciever.enforce_class.is_present() {
+        let classname_lit = LitStr::new(&classname, ty.span());
+        quote! {
+            if class != Sym::new(#classname_lit) {
+                return Err(DeError::invalid_type(Unexpected::Class(class), &self));
+            }
+        }
+    } else {
+        quote! {}
+    };
+
+    let expecting_text = reciever
+        .expecting
+        .clone()
+        .unwrap_or_else(|| format!("an instance of {classname}"));
     let expecting_lit = LitStr::new(&expecting_text, ty.span());
 
     quote! {
@@ -254,10 +277,12 @@ fn parse_newtype_struct(reciever: &TypeReciever, field: &FieldReciever) -> Token
                 impl<'de> Visitor<'de> for __Visitor {
                     type Value = #ty;
 
-                    fn visit_user_class<D>(self, _class: &'de Sym, deserializer: D) -> Result<Self::Value, DeError>
+                    fn visit_user_class<D>(self, class: &'de Sym, deserializer: D) -> Result<Self::Value, DeError>
                     where
                         D: DeserializerTrait<'de>
                     {
+                        #enforce_class
+
                         Ok(#ty(Deserialize::deserialize(deserializer)?))
                     }
 
