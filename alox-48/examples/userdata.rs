@@ -2,7 +2,7 @@
 use std::process::Command;
 
 #[derive(alox_48::Deserialize, Debug)]
-#[marshal(from = "alox_48::Userdata")]
+// #[marshal(from = "alox_48::Userdata")]
 struct Floats([f32; 3]);
 
 impl From<alox_48::Userdata> for Floats {

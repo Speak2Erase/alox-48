@@ -48,6 +48,8 @@ struct FieldReciever {
     ident: Option<Ident>,
     ty: Type,
 
+    rename: Option<LitStr>,
+
     #[darling(rename = "default")]
     default_fn: Option<Override<Path>>,
 
@@ -140,6 +142,17 @@ fn parse_struct(
 ) -> TokenStream {
     let ty = reciever.ident.clone();
 
+    // handle tuple and newtype structs
+    if let Some(field) = fields.iter().next() {
+        if field.ident.is_none() && fields.len() > 1 {
+            return quote! {
+                compile_error!("Derive macro does not currently support tuple structs!")
+            };
+        } else if field.ident.is_none() {
+            return parse_newtype_struct(reciever, field);
+        }
+    }
+
     let (field_const, field_lets, field_match, instantiate_fields): ParseUnpack = fields
         .iter()
         .map(|field| parse_field(reciever.default_fn.is_some(), field))
@@ -217,6 +230,10 @@ fn parse_struct(
     }
 }
 
+fn parse_newtype_struct(reciever: &TypeReciever, field: &FieldReciever) -> TokenStream {
+    todo!()
+}
+
 type ParseTuple<T> = (
     // const field
     T,
@@ -236,7 +253,12 @@ fn parse_field(reciever_has_default: bool, field: &FieldReciever) -> ParseResult
     let field_ty = field.ty.clone();
     let let_var_ident = Ident::new(&field_str, field_ident.span());
 
-    let field_lit_str = LitStr::new(&field_ident.to_string(), field_ident.span());
+    let field_lit = field
+        .rename
+        .as_ref()
+        .map(|r| r.value())
+        .unwrap_or_else(|| field_ident.to_string());
+    let field_lit_str = LitStr::new(&field_lit, field_ident.span());
     let const_sym = quote! { Sym::new(#field_lit_str) };
 
     let let_field = quote! { let mut #let_var_ident: Option<#field_ty> = None; };
