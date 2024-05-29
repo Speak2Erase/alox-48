@@ -57,26 +57,6 @@ pub enum Kind {
     /// A symbol was expected (usually for a class name) and something else was found.
     #[error("Expected a symbol got {0:?}")]
     ExpectedSymbol(Tag),
-    /// Unsupported data was encountered.
-    ///
-    /// alox-48 currently defines these data types as unsupported:
-    /// - HashDefault => A hash with a default value
-    /// - UserClass => An object inheriting from a default ruby class.
-    /// - RawRegexp => A regex in ruby.
-    /// - ClassRef => A class in ruby. No methods though.
-    /// - ModuleRef => A module in ruby.
-    /// - Extended => An object that was extended by a module at runtime.
-    /// - UserMarshal => An object that when deserialized deserializes to another type.
-    /// - Struct => A ruby "Struct".
-    ///
-    /// This is a UserClass:
-    /// ```rb
-    /// class CustomArray < Array
-    /// end
-    /// Marshal.dump(CustomArray.new)
-    /// ```
-    #[error("Unsupported data encountered: {0}. This is probably because it does not map well to Rust's type system")]
-    Unsupported(&'static str),
     /// End of input.
     #[error("End of input.")]
     Eof,
@@ -84,7 +64,7 @@ pub enum Kind {
     #[error("Version error, expected [4, 8], got {0:?}")]
     VersionError([u8; 2]),
     /// A custom error thrown by a visitor.
-    #[error("Serde error: {0}")]
+    #[error("Custom error: {0}")]
     Message(String),
 }
 

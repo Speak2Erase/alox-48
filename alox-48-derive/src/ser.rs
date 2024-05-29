@@ -27,6 +27,8 @@ struct TypeReciever {
     ident: Ident,
     data: darling::ast::Data<VariantReciever, FieldReciever>,
 
+    alox_crate_path: Option<Path>,
+
     class: Option<String>,
     #[darling(rename = "into")]
     into_type: Option<Type>,
@@ -68,11 +70,21 @@ pub fn derive_inner(input: syn::DeriveInput) -> proc_macro2::TokenStream {
     };
     let serialization_impl = parse_reciever(&reciever);
 
+    let alox_crate_path = reciever
+        .alox_crate_path
+        .as_ref()
+        .map(|path| {
+            quote! { use #path as _alox_48; }
+        })
+        .unwrap_or_else(|| {
+            quote! { extern crate alox_48 as _alox_48; }
+        });
+
     quote! {
         #[doc(hidden)]
         #[allow(non_upper_case_globals, non_snake_case, unused_attributes, unused_qualifications, no_effect_underscore_binding, non_camel_case_types)]
         const _: () = {
-            extern crate alox_48 as _alox_48;
+            #alox_crate_path
             use _alox_48::{
                 Serialize, SerializeArray, SerializeHash, SerializeIvars, SerializerTrait, ser::Error as SerError, Sym
             };

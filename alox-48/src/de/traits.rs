@@ -177,6 +177,10 @@ pub trait IvarAccess<'de> {
     fn len(&self) -> usize;
 
     fn index(&self) -> usize;
+
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 }
 
 pub trait HashAccess<'de> {
@@ -203,6 +207,10 @@ pub trait HashAccess<'de> {
     fn len(&self) -> usize;
 
     fn index(&self) -> usize;
+
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 }
 
 pub trait ArrayAccess<'de> {
@@ -213,6 +221,10 @@ pub trait ArrayAccess<'de> {
     fn len(&self) -> usize;
 
     fn index(&self) -> usize;
+
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 }
 
 impl<'de, 'a, A> IvarAccess<'de> for &'a mut A

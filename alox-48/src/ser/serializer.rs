@@ -18,7 +18,6 @@
 
 use indexmap::IndexSet;
 
-
 use super::{Error, Kind, Result};
 use crate::{Sym, Symbol};
 
@@ -141,7 +140,7 @@ impl Serializer {
         let bytes = bytes.as_ref();
 
         self.write_int(bytes.len() as _);
-        self.write_bytes(bytes)
+        self.write_bytes(bytes);
     }
 }
 

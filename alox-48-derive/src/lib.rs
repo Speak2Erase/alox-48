@@ -19,3 +19,5 @@ pub fn derive_serialize(item: TokenStream) -> TokenStream {
 
     ser::derive_inner(input).into()
 }
+
+// TODO tests

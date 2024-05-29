@@ -13,7 +13,9 @@
     clippy::missing_errors_doc,
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
-    clippy::cast_lossless
+    clippy::cast_lossless,
+    clippy::cast_possible_wrap,
+    unexpected_cfgs
 )]
 
 //! alox-48
@@ -285,11 +287,11 @@ mod arrays {
     }
 }
 
-#[cfg(disabled)]
 mod structs {
+    #[cfg(disabled)]
     #[test]
     fn deserialize_borrowed() {
-        #[derive(serde::Deserialize, serde::Serialize, PartialEq, Debug)]
+        #[derive(alox_48_derive::Deserialize, alox_48_derive::Serialize, PartialEq, Debug)]
         struct Test<'d> {
             field1: bool,
             field2: &'d str,
@@ -315,8 +317,9 @@ mod structs {
 
     #[test]
     fn userdata() {
-        #[derive(serde::Deserialize, Debug, PartialEq, Eq)]
-        #[serde(from = "crate::Userdata")]
+        #[derive(alox_48_derive::Deserialize, Debug, PartialEq, Eq)]
+        #[marshal(alox_crate_path = "crate")]
+        #[marshal(from = "crate::Userdata")]
         struct MyUserData {
             field: [char; 4],
         }
@@ -394,7 +397,7 @@ mod value_test {
     #[test]
     #[cfg(disabled)]
     fn untyped_to_borrowed() {
-        #[derive(serde::Deserialize, serde::Serialize, PartialEq, Debug)]
+        #[derive(alox_48::Deserialize, alox_48::Serialize, PartialEq, Debug)]
         struct Test<'d> {
             field1: bool,
             field2: &'d str,
