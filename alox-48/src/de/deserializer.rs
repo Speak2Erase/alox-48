@@ -460,7 +460,7 @@ impl<'de, 'a> super::DeserializerTrait<'de> for &'a mut Deserializer<'de> {
             }
             Tag::UserMarshal => {
                 let class = self.read_symbol_either()?;
-                visitor.visit_user_class(class, &mut *self)
+                visitor.visit_user_marshal(class, &mut *self)
             }
             Tag::Struct => {
                 let len = self.read_packed_int()? as _;
