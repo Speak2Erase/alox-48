@@ -22,10 +22,12 @@ use crate::{
     SerializerTrait, Symbol, Visitor,
 };
 
+/// A borrowed ruby symbol.
 #[repr(transparent)]
 pub struct Sym(pub(crate) str);
 
 impl Sym {
+    /// Create a new symbol from a borrowed string.
     pub const fn new(str: &str) -> &Self {
         // SAFETY: Sym is just a wrapper of str and is repr(transparent) so they have identical layouts. This should be safe.
         //
@@ -34,18 +36,26 @@ impl Sym {
         unsafe { std::mem::transmute(str) }
     }
 
+    /// Fetch the inner string.
     pub const fn as_str(&self) -> &str {
         &self.0
     }
 
+    /// Returns true if the inner string is empty.
     pub const fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
 
+    /// Returns true if the inner string starts with an '@'.
+    ///
+    /// (aka it's an instance variable name.)
     pub fn is_ivar(&self) -> bool {
         self.0.starts_with('@')
     }
 
+    /// Returns a new symbol with an '@' prepended to the inner string.
+    ///
+    /// If the inner string already starts with an '@', this will return a borrowed reference to the original symbol.
     pub fn to_ivar(&self) -> Cow<'_, Self> {
         if self.is_ivar() {
             Cow::Borrowed(self)
@@ -54,14 +64,19 @@ impl Sym {
         }
     }
 
+    /// Returns a new symbol with the '@' stripped from the inner string.
+    ///
+    /// If the inner string does not start with an '@', this will return None.
     pub fn to_rust_field_name(&self) -> Option<&Self> {
         self.0.strip_prefix('@').map(Self::new)
     }
 
+    /// Returns a new owned symbol.
     pub fn to_symbol(&self) -> Symbol {
         self.to_owned()
     }
 
+    /// Returns the length of the inner string.
     pub const fn len(&self) -> usize {
         self.0.len()
     }

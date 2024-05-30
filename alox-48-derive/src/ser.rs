@@ -63,22 +63,21 @@ struct VariantReciever {
     class: Option<String>,
 }
 
-pub fn derive_inner(input: syn::DeriveInput) -> proc_macro2::TokenStream {
-    let reciever = match TypeReciever::from_derive_input(&input) {
+pub fn derive_inner(input: &syn::DeriveInput) -> proc_macro2::TokenStream {
+    let reciever = match TypeReciever::from_derive_input(input) {
         Ok(reciever) => reciever,
         Err(e) => return e.write_errors(),
     };
     let serialization_impl = parse_reciever(&reciever);
 
-    let alox_crate_path = reciever
-        .alox_crate_path
-        .as_ref()
-        .map(|path| {
-            quote! { use #path as _alox_48; }
-        })
-        .unwrap_or_else(|| {
+    let alox_crate_path = reciever.alox_crate_path.as_ref().map_or_else(
+        || {
             quote! { extern crate alox_48 as _alox_48; }
-        });
+        },
+        |path| {
+            quote! { use #path as _alox_48; }
+        },
+    );
 
     quote! {
         #[doc(hidden)]
@@ -198,8 +197,7 @@ fn parse_field(field: &FieldReciever) -> ParseResult {
     let serialize_str = field
         .rename
         .as_ref()
-        .map(|r| r.value())
-        .unwrap_or_else(|| field_ident.to_string());
+        .map_or_else(|| field_ident.to_string(), syn::LitStr::value);
     let serialize_str = LitStr::new(&serialize_str, field_ident.span());
 
     let serialize_with_fn = field.serialize_with_fn.clone().or_else(|| {

@@ -22,9 +22,12 @@ use crate::{
     Serialize, SerializeIvars, VisitorInstance,
 };
 
+/// A type representing a ruby object with extra instance variables.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Instance<T> {
+    /// The inner value.
     pub value: T,
+    /// The extra instance variables attached to this object.
     pub fields: RbFields,
 }
 
@@ -92,6 +95,7 @@ where
 }
 
 impl<T> Instance<T> {
+    /// Take the inner value of this instance.
     pub fn into_inner(self) -> T {
         self.value
     }

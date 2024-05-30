@@ -22,7 +22,7 @@ use crate::{
     SerializerTrait, Sym, Visitor,
 };
 
-/// A symbol from ruby.
+/// An owned symbol from ruby.
 /// It's a newtype around a String, meant to preserve types during (de)serialization.
 ///
 /// When serializing, a [`String`] will be serialized as a String, but a [`Symbol`] will be serialized as a Symbol.
@@ -31,6 +31,7 @@ pub struct Symbol(pub(crate) String);
 
 #[allow(clippy::must_use_candidate)]
 impl Symbol {
+    /// Create a new symbol from a string.
     pub fn new(string: String) -> Self {
         Self(string)
     }
@@ -40,6 +41,7 @@ impl Symbol {
         &self.0
     }
 
+    /// Get this symbol as a borrowed Sym.
     pub fn as_sym(&self) -> &Sym {
         Sym::new(&self.0)
     }
@@ -54,10 +56,16 @@ impl Symbol {
         self.0.is_empty()
     }
 
+    /// Returns true if the string data starts with an '@'.
+    ///
+    /// (aka it's an instance variable name.)
     pub fn is_ivar(&self) -> bool {
         self.0.starts_with('@')
     }
 
+    /// Returns a new symbol with the '@' stripped from the inner string.
+    ///
+    /// If the inner string does not start with an '@', this will return None.
     pub fn as_rust_field_name(&self) -> Option<&Sym> {
         self.0.strip_prefix('@').map(Sym::new)
     }

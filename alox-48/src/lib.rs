@@ -1,6 +1,6 @@
-#![warn(rust_2018_idioms, clippy::pedantic)]
+#![warn(rust_2018_idioms, clippy::all, clippy::pedantic)]
 #![warn(
-    // missing_docs,
+    missing_docs,
     missing_debug_implementations,
     missing_copy_implementations,
     clippy::panic,
@@ -45,6 +45,13 @@
 //!
 //! This behavior could be simulated with [`Rc`] and/or [`Arc`] like `thurgood`, however for the sake of ergonomics (and memory cycles)
 //! alox-48 deserializes object links as copies instead. alox-48 does not serialize object links at all.
+//!
+//! Some common terminology:
+//! - ivar: Instance variable. These are variables that are attached to an object.
+//! - instance: Not to be confused with a class instance. This is a value that is not an object with attached ivars.
+//! - userdata: A special type of object that is serialized by the `_dump` method.
+//! - userclass: A subclass of a ruby object like `Hash` or `Array`.
+//! - object: A generic ruby object. Can be anything from a string to an instance of a class.
 
 // Copyright (C) 2022 Lily Lyons
 //
@@ -290,6 +297,7 @@ mod arrays {
 }
 
 mod structs {
+    // TODO
     #[cfg(disabled)]
     #[test]
     fn deserialize_borrowed() {

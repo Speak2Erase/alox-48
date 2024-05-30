@@ -28,14 +28,8 @@ use crate::{
 };
 
 /// An enum representing any ruby value.
+///
 /// Similar to `serde_json::Value`, although much more nuanced.
-///
-/// Ruby marshal supports many more data types than serde can- and Value covers (almost) all of them too.
-///
-/// Value is designed to use [`crate::VisitorExt`] extensively to avoid loss of information in the deserialization process.
-///
-/// Userdata/Object, for example, store the class name, which is not something that would normally be possible in serde.
-/// Symbols are preserved and deserialized as symbols.
 #[derive(Default, Clone, enum_as_inner::EnumAsInner, Debug)]
 pub enum Value {
     /// A value equivalent to nil in ruby (or [`()`] in rust.)
@@ -64,28 +58,50 @@ pub enum Value {
     Userdata(Userdata),
     /// A generic ruby object.
     Object(Object),
+    /// An "instance".
+    ///
+    /// The naming is a bit of a misnomer, as it's not an instance of a class, but rather a value with attached ivars.
+    /// It's distinct from object though, as it's a value (like a string) which does not usually have ivars.
     Instance(Instance<Box<Value>>),
+    /// Equivalent to a `Regexp` in Ruby.
     Regex {
+        /// The regex data.
         data: RbString,
+        /// Any flags associated with the regex. (global match, case insensitive, etc.)
         flags: u8,
     },
+    /// Equivalent to a `Struct` in Ruby.
     RbStruct(RbStruct),
+    /// Equivalent to a `Class` in Ruby.
     Class(Symbol),
+    /// Equivalent to a `Module` in Ruby.
     Module(Symbol),
+    /// A value that has been extended with a module.
     Extended {
+        /// The module that was extended.
         module: Symbol,
+        /// The value that was extended.
         value: Box<Value>,
     },
+    /// A subclass of a ruby class like `Hash` or `Array`.
     UserClass {
+        /// The subclass.
         class: Symbol,
+        /// The value of the subclass.
         value: Box<Value>,
     },
+    /// An object that has been serialized as another type.
     UserMarshal {
+        /// The class of the original object.
         class: Symbol,
+        /// The value of the object.
         value: Box<Value>,
     },
+    /// Unclear what this is? It's releated to C extensions according to the ruby docs.
     Data {
+        /// The class of the data.
         class: Symbol,
+        /// The value of the data.
         value: Box<Value>,
     },
 }

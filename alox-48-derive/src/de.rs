@@ -75,22 +75,21 @@ struct VariantReciever {
     class: Option<String>,
 }
 
-pub fn derive_inner(input: syn::DeriveInput) -> TokenStream {
-    let reciever = match TypeReciever::from_derive_input(&input) {
+pub fn derive_inner(input: &syn::DeriveInput) -> TokenStream {
+    let reciever = match TypeReciever::from_derive_input(input) {
         Ok(reciever) => reciever,
         Err(e) => return e.write_errors(),
     };
     let deserialization_impl = parse_reciever(&reciever);
 
-    let alox_crate_path = reciever
-        .alox_crate_path
-        .as_ref()
-        .map(|path| {
-            quote! { use #path as _alox_48; }
-        })
-        .unwrap_or_else(|| {
+    let alox_crate_path = reciever.alox_crate_path.as_ref().map_or_else(
+        || {
             quote! { extern crate alox_48 as _alox_48; }
-        });
+        },
+        |path| {
+            quote! { use #path as _alox_48; }
+        },
+    );
 
     quote! {
         #[doc(hidden)]
@@ -330,8 +329,7 @@ fn parse_field(reciever_has_default: bool, field: &FieldReciever) -> ParseResult
     let field_lit = field
         .rename
         .as_ref()
-        .map(|r| r.value())
-        .unwrap_or_else(|| field_ident.to_string());
+        .map_or_else(|| field_ident.to_string(), syn::LitStr::value);
     let field_lit_str = LitStr::new(&field_lit, field_ident.span());
     let const_sym = quote! { Sym::new(#field_lit_str) };
 
