@@ -198,6 +198,7 @@ macro_rules! array_impl {
     };
 }
 
+// FIXME: serialize u8 arrays as binary
 array_impl!(<T> Serialize for [T] where T: Serialize);
 
 // we can actually oneup serde here!

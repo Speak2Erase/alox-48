@@ -4,65 +4,13 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use darling::{
-    util::{Flag, Override},
-    FromDeriveInput,
-};
+use darling::FromDeriveInput;
 use itertools::Itertools;
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::{spanned::Spanned, Ident, LitStr, Path, Type};
+use syn::{spanned::Spanned, Ident, LitStr};
 
-#[derive(Debug, FromDeriveInput)]
-#[darling(attributes(marshal))]
-#[darling(supports(struct_any, enum_any))]
-struct TypeReciever {
-    ident: Ident,
-    data: darling::ast::Data<VariantReciever, FieldReciever>,
-
-    alox_crate_path: Option<Path>,
-
-    class: Option<String>,
-    deny_unknown_fields: Flag,
-    enforce_class: Flag,
-    #[darling(rename = "default")]
-    default_fn: Option<Override<Path>>,
-    #[darling(rename = "from")]
-    from_type: Option<Type>,
-    #[darling(rename = "try_from")]
-    try_from_type: Option<Type>,
-    expecting: Option<String>,
-}
-
-#[derive(Debug, darling::FromField)]
-#[darling(attributes(marshal))]
-struct FieldReciever {
-    ident: Option<Ident>,
-    ty: Type,
-
-    rename: Option<LitStr>,
-
-    #[darling(rename = "default")]
-    default_fn: Option<Override<Path>>,
-
-    skip: Flag,
-    skip_deserializing: Flag,
-
-    #[darling(rename = "deserialize_with")]
-    deserialize_with_fn: Option<Path>,
-    #[darling(rename = "with")]
-    with_module: Option<Path>,
-}
-
-#[allow(dead_code)]
-#[derive(Debug, darling::FromVariant)]
-struct VariantReciever {
-    ident: Ident,
-    fields: darling::ast::Fields<FieldReciever>,
-
-    transparent: Flag,
-    class: Option<String>,
-}
+use super::{FieldReciever, TypeReciever, VariantReciever};
 
 pub fn derive_inner(input: &syn::DeriveInput) -> TokenStream {
     let reciever = match TypeReciever::from_derive_input(input) {
@@ -96,6 +44,16 @@ pub fn derive_inner(input: &syn::DeriveInput) -> TokenStream {
 }
 
 fn parse_reciever(reciever: &TypeReciever) -> TokenStream {
+    if reciever
+        .generics
+        .lifetimes()
+        .any(|l| l.lifetime.ident == "de")
+    {
+        return quote! {
+            compile_error!("Cannot use 'de as a lifetime in the Deserialize derive macro")
+        };
+    }
+
     let ty = &reciever.ident;
 
     if reciever.try_from_type.is_some() && reciever.from_type.is_some() {
@@ -136,6 +94,7 @@ fn parse_reciever(reciever: &TypeReciever) -> TokenStream {
     }
 }
 
+#[allow(clippy::too_many_lines)]
 fn parse_struct(
     reciever: &TypeReciever,
     fields: &darling::ast::Fields<FieldReciever>,
@@ -152,6 +111,19 @@ fn parse_struct(
     }
 
     let ty = reciever.ident.clone();
+    let ty_lifetimes = reciever.generics.lifetimes().map(|l| &l.lifetime);
+    let ty_lifetimes = quote! { <#( #ty_lifetimes ),*> };
+    let visitor_lifetimes = reciever.generics.lifetimes().map(|l| &l.lifetime);
+    let visitor_lifetimes = quote! { <'de, #( #visitor_lifetimes ),*> };
+
+    let lifetimes_iter = reciever.generics.lifetimes().map(|l| &l.lifetime);
+    let de_lifetime = quote! { 'de: #( #lifetimes_iter )+* };
+    // i have no idea why we need to specify this here but rust gets *really* unhappy if we don't
+    let lifetimes_iter = reciever.generics.lifetimes().cloned().map(|mut l| {
+        l.bounds.push(syn::Lifetime::new("'de", l.span()));
+        l
+    });
+    let impl_lifetimes = quote! { <#de_lifetime, #( #lifetimes_iter ),*> };
 
     let (field_const, field_lets, field_match, instantiate_fields): ParseUnpack = fields
         .iter()
@@ -195,7 +167,7 @@ fn parse_struct(
 
     quote! {
         #[automatically_derived]
-        impl<'de> Deserialize<'de> for #ty {
+        impl #impl_lifetimes Deserialize<'de> for #ty #ty_lifetimes {
             fn deserialize<D>(deserializer: D) -> Result<Self, DeError>
             where
                 D: DeserializerTrait<'de>
@@ -204,10 +176,13 @@ fn parse_struct(
                     #( #field_const ),*
                 ];
 
-                struct __Visitor;
+                struct __Visitor #impl_lifetimes {
+                    _marker: std::marker::PhantomData<#ty #ty_lifetimes >,
+                    _phantom: std::marker::PhantomData<&'de ()>,
+                }
 
-                impl<'de> Visitor<'de> for __Visitor {
-                    type Value = #ty;
+                impl #impl_lifetimes Visitor<'de> for __Visitor #visitor_lifetimes {
+                    type Value = #ty #ty_lifetimes;
 
                     fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                         formatter.write_str(#expecting_lit)
@@ -236,7 +211,7 @@ fn parse_struct(
                     }
                 }
 
-                deserializer.deserialize(__Visitor)
+                deserializer.deserialize(__Visitor { _marker: std::marker::PhantomData, _phantom: std::marker::PhantomData })
             }
         }
     }
@@ -244,6 +219,19 @@ fn parse_struct(
 
 fn parse_newtype_struct(reciever: &TypeReciever) -> TokenStream {
     let ty = reciever.ident.clone();
+    let ty_lifetimes = reciever.generics.lifetimes().map(|l| &l.lifetime);
+    let ty_lifetimes = quote! { <#( #ty_lifetimes ),*> };
+    let visitor_lifetimes = reciever.generics.lifetimes().map(|l| &l.lifetime);
+    let visitor_lifetimes = quote! { <'de, #( #visitor_lifetimes ),*> };
+
+    let lifetimes_iter = reciever.generics.lifetimes().map(|l| &l.lifetime);
+    let de_lifetime = quote! { 'de: #( #lifetimes_iter )+* };
+    // i have no idea why we need to specify this here but rust gets *really* unhappy if we don't
+    let lifetimes_iter = reciever.generics.lifetimes().cloned().map(|mut l| {
+        l.bounds.push(syn::Lifetime::new("'de", l.span()));
+        l
+    });
+    let impl_lifetimes = quote! { <#de_lifetime, #( #lifetimes_iter ),*> };
 
     let classname = reciever.class.clone().unwrap_or_else(|| ty.to_string());
     let enforce_class = if reciever.enforce_class.is_present() {
@@ -265,16 +253,19 @@ fn parse_newtype_struct(reciever: &TypeReciever) -> TokenStream {
 
     quote! {
         #[automatically_derived]
-        impl<'de> Deserialize<'de> for #ty {
+        impl #impl_lifetimes Deserialize<'de> for #ty #ty_lifetimes {
             fn deserialize<D>(deserializer: D) -> Result<Self, DeError>
             where
                 D: DeserializerTrait<'de>
             {
 
-                struct __Visitor;
+                struct __Visitor #impl_lifetimes {
+                    _marker: std::marker::PhantomData<#ty #ty_lifetimes >,
+                    _phantom: std::marker::PhantomData<&'de ()>,
+                }
 
-                impl<'de> Visitor<'de> for __Visitor {
-                    type Value = #ty;
+                impl #impl_lifetimes Visitor<'de> for __Visitor #visitor_lifetimes {
+                    type Value = #ty #ty_lifetimes;
 
                     fn visit_user_class<D>(self, class: &'de Sym, deserializer: D) -> Result<Self::Value, DeError>
                     where
@@ -290,7 +281,7 @@ fn parse_newtype_struct(reciever: &TypeReciever) -> TokenStream {
                     }
                 }
 
-                deserializer.deserialize(__Visitor)
+                deserializer.deserialize(__Visitor { _marker: std::marker::PhantomData, _phantom: std::marker::PhantomData })
             }
         }
     }

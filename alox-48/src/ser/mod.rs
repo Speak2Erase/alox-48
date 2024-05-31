@@ -16,3 +16,21 @@ pub use serializer::Serializer;
 pub use traits::{
     Serialize, SerializeArray, SerializeHash, SerializeIvars, Serializer as SerializerTrait,
 };
+
+/// A helper to ensure byte slices are serialized as strings.
+///
+/// By default, this crate serializes *all* `[T]` as arrays, even if `T` is `u8`.
+/// Without specialization, this isn't really possible to fix.
+///
+/// This type is a workaround for that issue.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ByteString<'a>(pub &'a [u8]);
+
+impl Serialize for ByteString<'_> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok>
+    where
+        S: SerializerTrait,
+    {
+        serializer.serialize_string(self.0)
+    }
+}

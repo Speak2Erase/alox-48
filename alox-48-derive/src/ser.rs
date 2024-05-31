@@ -4,53 +4,12 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use darling::{util::Flag, FromDeriveInput};
+use darling::FromDeriveInput;
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::{spanned::Spanned, Ident, LitInt, LitStr, Path, Type};
+use syn::{spanned::Spanned, Ident, LitInt, LitStr};
 
-#[derive(Debug, FromDeriveInput)]
-#[darling(attributes(marshal))]
-#[darling(supports(struct_any, enum_any))]
-struct TypeReciever {
-    ident: Ident,
-    data: darling::ast::Data<VariantReciever, FieldReciever>,
-
-    alox_crate_path: Option<Path>,
-
-    class: Option<String>,
-    #[darling(rename = "into")]
-    into_type: Option<Type>,
-    #[darling(rename = "try_into")]
-    try_into_type: Option<Type>,
-}
-
-#[derive(Debug, darling::FromField)]
-#[darling(attributes(marshal))]
-struct FieldReciever {
-    ident: Option<Ident>,
-    ty: Type,
-
-    rename: Option<LitStr>,
-
-    skip: Flag,
-    skip_serializing: Flag,
-
-    #[darling(rename = "serialize_with")]
-    serialize_with_fn: Option<Path>,
-    #[darling(rename = "with")]
-    with_module: Option<Path>,
-}
-
-#[allow(dead_code)]
-#[derive(Debug, darling::FromVariant)]
-struct VariantReciever {
-    ident: Ident,
-    fields: darling::ast::Fields<FieldReciever>,
-
-    transparent: Flag,
-    class: Option<String>,
-}
+use super::{FieldReciever, TypeReciever, VariantReciever};
 
 pub fn derive_inner(input: &syn::DeriveInput) -> proc_macro2::TokenStream {
     let reciever = match TypeReciever::from_derive_input(input) {
@@ -136,6 +95,9 @@ fn parse_struct(
     }
 
     let ty = reciever.ident.clone();
+    let impl_lifetimes = reciever.generics.lifetimes();
+    let ty_lifetimes = reciever.generics.lifetimes().map(|l| &l.lifetime);
+
     let classname = reciever.class.clone().unwrap_or_else(|| ty.to_string());
 
     let field_impls = fields.iter().map(parse_field);
@@ -144,7 +106,7 @@ fn parse_struct(
 
     quote! {
         #[automatically_derived]
-        impl Serialize for #ty {
+        impl < #( #impl_lifetimes ),* > Serialize for #ty < #( #ty_lifetimes ),* > {
             fn serialize<S>(&self, serializer: S) -> Result<S::Ok, SerError>
                 where S: SerializerTrait
             {
@@ -158,11 +120,14 @@ fn parse_struct(
 
 fn parse_newtype_struct(reciever: &TypeReciever) -> TokenStream {
     let ty = reciever.ident.clone();
+    let impl_lifetimes = reciever.generics.lifetimes();
+    let ty_lifetimes = reciever.generics.lifetimes().map(|l| &l.lifetime);
+
     let classname = reciever.class.clone().unwrap_or_else(|| ty.to_string());
 
     quote! {
         #[automatically_derived]
-        impl Serialize for #ty {
+        impl < #( #impl_lifetimes ),* > Serialize for #ty < #( #ty_lifetimes ),* > {
             fn serialize<S>(&self, serializer: S) -> Result<S::Ok, SerError>
                 where S: SerializerTrait
             {
@@ -212,6 +177,12 @@ fn parse_field(field: &FieldReciever) -> ParseResult {
                 let field = Sym::new(#serialize_str).to_ivar();
                 serialize_ivars.serialize_entry(&field, &__SerializeField(&self.#field_ident))?;
             }
+        }
+    } else if field.byte_string.is_present() {
+        quote! {
+            let field = Sym::new(#serialize_str).to_ivar();
+            let ty = _alox_48::SerializeByteString(self.#field_ident.as_ref());
+            serialize_ivars.serialize_entry(&field, &ty)?;
         }
     } else {
         quote! {

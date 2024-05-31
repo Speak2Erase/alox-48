@@ -79,8 +79,8 @@ pub use de::{
     InstanceAccess, IvarAccess, Result as DeResult, Visitor, VisitorInstance, VisitorOption,
 };
 pub use ser::{
-    Error as SerError, Result as SerResult, Serialize, SerializeArray, SerializeHash,
-    SerializeIvars, Serializer, SerializerTrait,
+    ByteString as SerializeByteString, Error as SerError, Result as SerResult, Serialize,
+    SerializeArray, SerializeHash, SerializeIvars, Serializer, SerializerTrait,
 };
 
 #[cfg(feature = "derive")]
@@ -286,11 +286,10 @@ mod arrays {
 }
 
 mod structs {
-    // TODO
-    #[cfg(disabled)]
     #[test]
     fn deserialize_borrowed() {
         #[derive(alox_48_derive::Deserialize, alox_48_derive::Serialize, PartialEq, Debug)]
+        #[marshal(alox_crate_path = "crate")]
         struct Test<'d> {
             field1: bool,
             field2: &'d str,
@@ -312,6 +311,54 @@ mod structs {
                 field2: "hello there"
             }
         );
+    }
+
+    #[test]
+    fn deserialize_multi_borrowed() {
+        #[derive(alox_48_derive::Deserialize, alox_48_derive::Serialize, PartialEq, Debug)]
+        #[marshal(alox_crate_path = "crate")]
+        struct Test<'a, 'b> {
+            field1: bool,
+            field2: &'a str,
+            #[marshal(byte_string)]
+            field3: &'b [u8],
+        }
+
+        let initial = Test {
+            field1: true,
+            field2: "borrowed from the stack",
+            field3: b"also borrowed from the stack",
+        };
+
+        let bytes = crate::to_bytes(&initial).unwrap();
+        let obj: Test<'_, '_> = crate::from_bytes(&bytes).unwrap();
+
+        assert_eq!(obj, initial);
+    }
+
+    #[test]
+    fn deserialize_multi_bounds() {
+        #[derive(alox_48_derive::Deserialize, alox_48_derive::Serialize, PartialEq, Debug)]
+        #[marshal(alox_crate_path = "crate")]
+        struct Test<'a, 'b: 'a, 'c: 'a + 'b> {
+            field1: bool,
+            field2: &'a str,
+            #[marshal(byte_string)]
+            field3: &'b [u8],
+            field4: &'c str,
+        }
+
+        let initial = Test {
+            field1: true,
+            field2: "borrowed from the stack",
+            field3: b"also borrowed from the stack",
+            field4: "multiple bounds",
+        };
+
+        let bytes = crate::to_bytes(&initial).unwrap();
+        let obj: Test<'_, '_, '_> = crate::from_bytes(&bytes).unwrap();
+
+        assert_eq!(obj, initial);
     }
 
     #[test]
@@ -425,9 +472,10 @@ mod value_test {
     }
 
     #[test]
-    #[cfg(disabled)]
+
     fn untyped_to_borrowed() {
-        #[derive(alox_48::Deserialize, alox_48::Serialize, PartialEq, Debug)]
+        #[derive(alox_48_derive::Deserialize, alox_48_derive::Serialize, PartialEq, Debug)]
+        #[marshal(alox_crate_path = "crate")]
         struct Test<'d> {
             field1: bool,
             field2: &'d str,
@@ -442,7 +490,7 @@ mod value_test {
 
         let obj: crate::Value = crate::from_bytes(bytes).unwrap();
 
-        let test: Test<'_> = serde::Deserialize::deserialize(&obj).unwrap();
+        let test: Test<'_> = crate::Deserialize::deserialize(&obj).unwrap();
 
         assert_eq!(
             test,
