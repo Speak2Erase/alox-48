@@ -1,6 +1,6 @@
 [package]
 name = "alox-48-derive"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 authors = ["Melody Madeline Lyons"]
 repository = "https://github.com/Speak2Erase/alox-48"
