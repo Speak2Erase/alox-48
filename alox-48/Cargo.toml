@@ -1,6 +1,6 @@
 [package]
 name = "alox-48"
-version = "0.5.0"
+version = "0.5.0-pre.2"
 edition = "2021"
 authors = ["Melody Madeline Lyons"]
 repository = "https://github.com/Speak2Erase/alox-48"
@@ -15,7 +15,7 @@ indexmap = { version = "2.0", features = ["serde", "std"] }
 thiserror = "1.0"
 paste = "1.0"
 
-alox-48-derive = { version = "0.1.0", path = "../alox-48-derive/", optional = true }
+alox-48-derive = { version = "0.2.0", path = "../alox-48-derive/", optional = true }
 
 [features]
 derive = ["alox-48-derive"]
