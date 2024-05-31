@@ -10,11 +10,12 @@ use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet, LinkedList, VecDeque},
     hash::{BuildHasher, Hash},
     marker::PhantomData,
+    num::*,
 };
 
 use super::{
     traits::VisitorOption, ArrayAccess, Deserialize, DeserializerTrait, Error, HashAccess, Result,
-    Visitor,
+    Unexpected, Visitor,
 };
 use crate::Sym;
 
@@ -50,7 +51,58 @@ macro_rules! primitive_int_impl {
     };
 }
 
+struct NonZeroIntVisitor;
+
+impl<'de> Visitor<'de> for NonZeroIntVisitor {
+    type Value = std::num::NonZeroI32;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("a non-zero integer")
+    }
+
+    fn visit_i32(self, v: i32) -> Result<Self::Value> {
+        std::num::NonZeroI32::new(v)
+            .ok_or_else(|| Error::invalid_value(Unexpected::Integer(v), &self))
+    }
+
+    fn visit_f64(self, v: f64) -> Result<Self::Value> {
+        std::num::NonZeroI32::new(v as i32)
+            .ok_or_else(|| Error::invalid_value(Unexpected::Integer(v as i32), &self))
+    }
+}
+
 primitive_int_impl!(u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize);
+
+macro_rules! nonzero_int_impl {
+    ($($primitive:ty),*) => {
+        $(impl<'de> Deserialize<'de> for $primitive {
+            fn deserialize<D>(deserializer: D) -> Result<Self>
+            where
+                D: DeserializerTrait<'de>,
+            {
+                let i = deserializer.deserialize(NonZeroIntVisitor)?.get();
+                // we've already asserted that it's non-zero simply by the fact that NonZeroIntVisitor returns a NonZeroI32.
+                // so this new_unchecked is safe
+                Ok(unsafe { <$primitive>::new_unchecked(i as _) })
+            }
+        })*
+    };
+}
+
+nonzero_int_impl!(
+    NonZeroU8,
+    NonZeroU16,
+    NonZeroU32,
+    NonZeroU64,
+    NonZeroU128,
+    NonZeroUsize,
+    NonZeroI8,
+    NonZeroI16,
+    NonZeroI32,
+    NonZeroI64,
+    NonZeroI128,
+    NonZeroIsize
+);
 
 struct UnitVisitor;
 
