@@ -114,7 +114,7 @@ impl<'de> Visitor<'de> for ValueVisitor {
     where
         A: InstanceAccess<'de>,
     {
-        let (value, mut instance_fields) = instance.value(ValueVisitor)?;
+        let (value, mut instance_fields) = instance.value()?;
         let mut fields = RbFields::with_capacity(instance_fields.len());
         while let Some((field, value)) = instance_fields.next_entry()? {
             fields.insert(field.to_symbol(), value);
@@ -295,20 +295,7 @@ impl<'de> DeserializerTrait<'de> for &'de Value {
 impl<'de> InstanceAccess<'de> for ValueInstanceAccess<'de> {
     type IvarAccess = ValueIVarAccess<'de>;
 
-    fn value<V>(self, visitor: V) -> Result<(V::Value, Self::IvarAccess)>
-    where
-        V: Visitor<'de>,
-    {
-        let value = self.value.deserialize(visitor)?;
-        let access = ValueIVarAccess {
-            fields: self.fields,
-            index: 0,
-            state: MapState::Value, // we want to enforce getting a key next so we set the state to value
-        };
-        Ok((value, access))
-    }
-
-    fn value_deserialize_seed<V>(self, seed: V) -> Result<(V::Value, Self::IvarAccess)>
+    fn value_seed<V>(self, seed: V) -> Result<(V::Value, Self::IvarAccess)>
     where
         V: DeserializeSeed<'de>,
     {

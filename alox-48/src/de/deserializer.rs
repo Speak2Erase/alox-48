@@ -12,7 +12,7 @@
 use std::collections::BTreeSet;
 
 use super::{ignored::Ignored, DeserializeSeed, Error, Kind, Result};
-use crate::{tag::Tag, Deserialize, DeserializerTrait, Sym, Visitor};
+use crate::{tag::Tag, Deserialize, Sym, Visitor};
 
 /// The alox-48 deserializer.
 #[derive(Debug, Clone)]
@@ -576,27 +576,7 @@ impl<'de, 'a> super::DeserializerTrait<'de> for &'a mut Deserializer<'de> {
 impl<'de, 'a> super::InstanceAccess<'de> for &'a mut InstanceAccess<'de, 'a> {
     type IvarAccess = IvarAccess<'de, 'a>;
 
-    fn value<V>(self, visitor: V) -> Result<(V::Value, Self::IvarAccess)>
-    where
-        V: Visitor<'de>,
-    {
-        let result = self.deserializer.deserialize(visitor)?;
-
-        let len = self.deserializer.read_usize()?;
-        *self.len = len;
-
-        Ok((
-            result,
-            IvarAccess {
-                deserializer: &mut *self.deserializer,
-                len,
-                index: self.index,
-                state: MapState::Value, // we want to enforce getting a key next so we set the state to value
-            },
-        ))
-    }
-
-    fn value_deserialize_seed<V>(self, seed: V) -> Result<(V::Value, Self::IvarAccess)>
+    fn value_seed<V>(self, seed: V) -> Result<(V::Value, Self::IvarAccess)>
     where
         V: DeserializeSeed<'de>,
     {

@@ -41,7 +41,7 @@ where
     where
         A: crate::InstanceAccess<'de>,
     {
-        let (value, mut ivar) = access.value_deserialize()?;
+        let (value, mut ivar) = access.value()?;
 
         let mut fields = RbFields::with_capacity(ivar.len());
         while let Some((field, value)) = ivar.next_entry()? {

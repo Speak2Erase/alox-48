@@ -439,24 +439,7 @@ where
 {
     type IvarAccess = WrappedIvarAccess<'trace, X::IvarAccess>;
 
-    fn value<V>(self, visitor: V) -> DeResult<(V::Value, Self::IvarAccess)>
-    where
-        V: Visitor<'de>,
-    {
-        let wrapped_visitor = Wrapped {
-            inner: visitor,
-            trace: &mut *self.trace,
-        };
-        let (value, access) = self.inner.value(wrapped_visitor)?;
-        let wrapped_access = WrappedIvarAccess {
-            inner: access,
-            trace: self.trace,
-            current_field: None,
-        };
-        Ok((value, wrapped_access))
-    }
-
-    fn value_deserialize_seed<V>(self, seed: V) -> DeResult<(V::Value, Self::IvarAccess)>
+    fn value_seed<V>(self, seed: V) -> DeResult<(V::Value, Self::IvarAccess)>
     where
         V: DeserializeSeed<'de>,
     {
@@ -464,7 +447,7 @@ where
             inner: seed,
             trace: &mut *self.trace,
         };
-        let (value, access) = self.inner.value_deserialize_seed(wrapped_seed)?;
+        let (value, access) = self.inner.value_seed(wrapped_seed)?;
         let wrapped_access = WrappedIvarAccess {
             inner: access,
             trace: self.trace,

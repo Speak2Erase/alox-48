@@ -149,9 +149,22 @@ pub trait Visitor<'de>: Sized {
     where
         A: InstanceAccess<'de>,
     {
-        // TODO: serde doesn't do antyhing like this. Maybe this is bad?
-        // probably something to do with self-describing formats (which marshal is not)
-        let (value, _) = instance.value(self)?;
+        struct SeededVisitor<T>(pub T);
+        impl<'de, T> DeserializeSeed<'de> for SeededVisitor<T>
+        where
+            T: Visitor<'de>,
+        {
+            type Value = T::Value;
+
+            fn deserialize<D>(self, deserializer: D) -> Result<Self::Value>
+            where
+                D: Deserializer<'de>,
+            {
+                deserializer.deserialize(self.0)
+            }
+        }
+
+        let (value, _) = instance.value_seed(SeededVisitor(self))?;
         Ok(value)
     }
     /// Input contains an extended object.
@@ -236,28 +249,21 @@ pub trait InstanceAccess<'de>: Sized {
     /// The instance variable accessor for this instance.
     type IvarAccess: IvarAccess<'de>;
 
-    /// Deserialize the value of the instance, using the given visitor.
-    ///
-    /// This is used in the default implementation of [`Visitor::visit_instance`].
-    fn value<V>(self, visitor: V) -> Result<(V::Value, Self::IvarAccess)>
-    where
-        V: Visitor<'de>;
-
     /// Deserialize the value of the instance, using the given seed.
     ///
     /// This allows you to pass data in when deserializing the value.
-    fn value_deserialize_seed<V>(self, seed: V) -> Result<(V::Value, Self::IvarAccess)>
+    fn value_seed<V>(self, seed: V) -> Result<(V::Value, Self::IvarAccess)>
     where
         V: DeserializeSeed<'de>;
 
     /// Deserialize the value of the instance.
     ///
     /// This is a convenience method to deserialize a value without its visitor.
-    fn value_deserialize<T>(self) -> Result<(T, Self::IvarAccess)>
+    fn value<T>(self) -> Result<(T, Self::IvarAccess)>
     where
         T: Deserialize<'de>,
     {
-        self.value_deserialize_seed(PhantomData::<T>)
+        self.value_seed(PhantomData::<T>)
     }
 }
 

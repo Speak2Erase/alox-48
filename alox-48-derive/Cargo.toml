@@ -8,6 +8,7 @@ license = "MPL-2.0"
 description = "ruby marshal data deserializer"
 keywords = ["ruby", "data-format", "marshal", "ruby-marshal"]
 categories = ["parser-implementations"]
+readme = "../README.md"
 
 [lib]
 proc-macro = true

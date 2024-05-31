@@ -82,7 +82,7 @@ impl<'de> Visitor<'de> for IgnoredVisitor {
     where
         A: InstanceAccess<'de>,
     {
-        let (_, mut instance_variables) = instance.value(self)?;
+        let (_, mut instance_variables) = instance.value::<Ignored>()?;
         while let Some((_, Ignored)) = instance_variables.next_entry()? {}
         Ok(Ignored)
     }
