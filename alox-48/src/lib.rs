@@ -606,8 +606,6 @@ mod round_trip {
 
         let bytes = to_bytes(&original).unwrap();
 
-        println!("{}", pretty_hex::pretty_hex(&bytes));
-
         let new: Value = from_bytes(&bytes).unwrap();
 
         assert_eq!(original, new);
