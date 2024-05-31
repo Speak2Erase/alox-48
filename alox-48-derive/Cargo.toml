@@ -6,17 +6,7 @@ authors = ["Melody Madeline Lyons"]
 repository = "https://github.com/Speak2Erase/alox-48"
 license = "MPL-2.0"
 description = "ruby marshal data deserializer"
-keywords = [
-  "ruby",
-  "deserialization",
-  "marshal",
-  "ruby-marshal",
-  "data-format",
-  "parser",
-  "deserializer",
-  "serialization",
-  "serializer",
-]
+keywords = ["ruby", "data-format", "marshal", "ruby-marshal"]
 categories = ["parser-implementations"]
 
 [lib]
