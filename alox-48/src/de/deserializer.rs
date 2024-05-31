@@ -137,6 +137,21 @@ impl<'de> Deserializer<'de> {
         })
     }
 
+    /// Deserialize a value from the input.
+    pub fn deserialize_value<T>(&mut self) -> Result<T>
+    where
+        T: Deserialize<'de>,
+    {
+        T::deserialize(self)
+    }
+
+    /// Returns the current position of the deserializer.
+    ///
+    /// This is useful for debugging.
+    pub fn current_position(&self) -> usize {
+        self.cursor.position
+    }
+
     fn read_packed_int(&mut self) -> Result<i32> {
         // The bounds of a Ruby Marshal packed integer are [-(2**30), 2**30 - 1], anything beyond that
         // gets serialized as a bignum.
@@ -463,10 +478,11 @@ impl<'de, 'a> super::DeserializerTrait<'de> for &'a mut Deserializer<'de> {
                 visitor.visit_user_marshal(class, &mut *self)
             }
             Tag::Struct => {
+                let name = self.read_symbol_either()?;
+
                 let len = self.read_packed_int()? as _;
                 let mut index = 0;
 
-                let name = self.read_symbol_either()?;
                 let result = visitor.visit_struct(
                     name,
                     IvarAccess {

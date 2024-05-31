@@ -8,7 +8,7 @@
 use indexmap::IndexSet;
 
 use super::{Error, Kind, Result};
-use crate::{Sym, Symbol};
+use crate::{tag::Tag, Sym, Symbol};
 
 /// The `alox_48` serializer.
 ///
@@ -101,18 +101,18 @@ impl Serializer {
         }
     }
 
-    fn write(&mut self, b: u8) {
-        self.output.push(b);
+    fn write(&mut self, b: impl Into<u8>) {
+        self.output.push(b.into());
     }
 
     fn write_symbol(&mut self, symbol: &Sym) {
         if let Some(idx) = self.symlink.get_index_of(symbol) {
-            self.write(b';');
+            self.write(Tag::Symlink);
             self.write_int(idx as _);
         } else {
             self.symlink.insert(symbol.to_symbol());
 
-            self.write(b':');
+            self.write(Tag::Symbol);
             self.write_int(symbol.len() as _);
 
             self.write_bytes(symbol);
@@ -141,26 +141,26 @@ impl<'a> super::SerializerTrait for &'a mut Serializer {
     type SerializeArray = SerializeArray<'a>;
 
     fn serialize_nil(self) -> Result<Self::Ok> {
-        self.write(b'0');
+        self.write(Tag::Nil);
 
         Ok(())
     }
 
     fn serialize_bool(self, v: bool) -> Result<Self::Ok> {
-        self.write(if v { b'T' } else { b'F' });
+        self.write(if v { Tag::True } else { Tag::False });
 
         Ok(())
     }
 
     fn serialize_i32(self, v: i32) -> Result<Self::Ok> {
-        self.write(b'i');
+        self.write(Tag::Integer);
         self.write_int(v as i64);
 
         Ok(())
     }
 
     fn serialize_f64(self, v: f64) -> Result<Self::Ok> {
-        self.write(b'f');
+        self.write(Tag::Float);
 
         let str = v.to_string();
         self.write_bytes_len(str);
@@ -169,7 +169,7 @@ impl<'a> super::SerializerTrait for &'a mut Serializer {
     }
 
     fn serialize_hash(self, len: usize) -> Result<Self::SerializeHash> {
-        self.write(b'{');
+        self.write(Tag::Hash);
         self.write_int(len as _);
 
         Ok(SerializeHash {
@@ -180,7 +180,7 @@ impl<'a> super::SerializerTrait for &'a mut Serializer {
     }
 
     fn serialize_array(self, len: usize) -> Result<Self::SerializeArray> {
-        self.write(b'[');
+        self.write(Tag::Array);
         self.write_int(len as _);
 
         Ok(SerializeArray {
@@ -191,7 +191,7 @@ impl<'a> super::SerializerTrait for &'a mut Serializer {
     }
 
     fn serialize_string(self, data: &[u8]) -> Result<Self::Ok> {
-        self.write(b'"');
+        self.write(Tag::String);
         self.write_bytes_len(data);
 
         Ok(())
@@ -204,7 +204,7 @@ impl<'a> super::SerializerTrait for &'a mut Serializer {
     }
 
     fn serialize_regular_expression(self, regex: &[u8], flags: u8) -> Result<Self::Ok> {
-        self.write(b'/');
+        self.write(Tag::RawRegexp);
         self.write_bytes_len(regex);
         self.write(flags);
 
@@ -212,7 +212,7 @@ impl<'a> super::SerializerTrait for &'a mut Serializer {
     }
 
     fn serialize_object(self, class: &Sym, len: usize) -> Result<Self::SerializeIvars> {
-        self.write(b'o');
+        self.write(Tag::Object);
         self.write_symbol(class);
         self.write_int(len as _);
 
@@ -224,7 +224,7 @@ impl<'a> super::SerializerTrait for &'a mut Serializer {
     }
 
     fn serialize_struct(self, name: &Sym, len: usize) -> Result<Self::SerializeIvars> {
-        self.write(b'S');
+        self.write(Tag::Struct);
         self.write_symbol(name);
         self.write_int(len as _);
 
@@ -236,7 +236,7 @@ impl<'a> super::SerializerTrait for &'a mut Serializer {
     }
 
     fn serialize_class(self, class: &Sym) -> Result<Self::Ok> {
-        self.write(b'c');
+        self.write(Tag::ClassRef);
         // Apparently, this isn't a symbol. How strange!
         self.write_bytes_len(class);
 
@@ -244,7 +244,7 @@ impl<'a> super::SerializerTrait for &'a mut Serializer {
     }
 
     fn serialize_module(self, module: &Sym) -> Result<Self::Ok> {
-        self.write(b'm');
+        self.write(Tag::ModuleRef);
         self.write_bytes_len(module);
 
         Ok(())
@@ -254,7 +254,7 @@ impl<'a> super::SerializerTrait for &'a mut Serializer {
     where
         V: crate::Serialize + ?Sized,
     {
-        self.write(b'I');
+        self.write(Tag::Instance);
         value.serialize(&mut *self)?;
         self.write_int(len as _);
 
@@ -270,7 +270,7 @@ impl<'a> super::SerializerTrait for &'a mut Serializer {
         V: crate::Serialize + ?Sized,
     {
         // the ruby docs lie! it is the module which comes before the value.
-        self.write(b'e');
+        self.write(Tag::Extended);
         self.write_symbol(module);
         value.serialize(self)
     }
@@ -279,15 +279,15 @@ impl<'a> super::SerializerTrait for &'a mut Serializer {
     where
         V: crate::Serialize + ?Sized,
     {
-        self.write(b'C');
+        self.write(Tag::UserClass);
         self.write_symbol(class);
         value.serialize(self)
     }
 
     fn serialize_user_data(self, class: &Sym, data: &[u8]) -> Result<Self::Ok> {
-        self.write(b'u');
+        self.write(Tag::UserDef);
         self.write_symbol(class);
-        self.write_bytes(data);
+        self.write_bytes_len(data);
 
         Ok(())
     }
@@ -296,7 +296,7 @@ impl<'a> super::SerializerTrait for &'a mut Serializer {
     where
         V: crate::Serialize + ?Sized,
     {
-        self.write(b'U');
+        self.write(Tag::UserMarshal);
         self.write_symbol(class);
         value.serialize(self)
     }
@@ -305,7 +305,7 @@ impl<'a> super::SerializerTrait for &'a mut Serializer {
     where
         V: crate::Serialize + ?Sized,
     {
-        self.write(b'd');
+        self.write(Tag::Data);
         self.write_symbol(class);
         value.serialize(self)
     }
