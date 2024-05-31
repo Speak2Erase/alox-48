@@ -4,6 +4,28 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+#[derive(alox_48::Serialize, Debug)]
+struct Test {
+    a: i32,
+    b: i32,
+
+    throws: Throws,
+}
+
+#[derive(alox_48::Serialize, Debug)]
+struct Throws {
+    string: &'static str,
+    #[marshal(serialize_with = "throws_error")]
+    what_errors: (),
+}
+
+fn throws_error<T, S>(_: &T, _serializer: S) -> alox_48::SerResult<S::Ok>
+where
+    S: alox_48::SerializerTrait,
+{
+    Err(alox_48::SerError::custom("custom error"))
+}
+
 fn main() {
     let data = [
         0x04, 0x08, 0x5b, 0x06, 0x6f, 0x3a, 0x0c, 0x42, 0x61, 0x64, 0x44, 0x61, 0x74, 0x61, 0x08,
@@ -34,5 +56,33 @@ fn main() {
         for ctx in trace.context.iter().rev() {
             println!("    {ctx}");
         }
+    }
+
+    let test = Test {
+        a: 1,
+        b: 2,
+        throws: Throws {
+            string: "something went wrong",
+            what_errors: (),
+        },
+    };
+
+    let mut serializer = alox_48::Serializer::new();
+    let (error, trace) =
+        alox_48::path_to_error::serialize(&test, &mut serializer).expect_err("what??");
+
+    println!("Error: {error}");
+    println!("Backtrace:");
+    for ctx in trace.context.iter().rev() {
+        println!("    {ctx}");
+    }
+
+    let (error, trace) =
+        alox_48::path_to_error::serialize(&test, alox_48::ValueSerializer).expect_err("what??");
+
+    println!("Error: {error}");
+    println!("Backtrace:");
+    for ctx in trace.context.iter().rev() {
+        println!("    {ctx}");
     }
 }

@@ -29,6 +29,7 @@ pub struct SerializeIvars<'a> {
     serializer: &'a mut Serializer,
     len: usize,
     index: usize,
+    state: MapState,
 }
 
 #[derive(Debug)]
@@ -36,6 +37,7 @@ pub struct SerializeHash<'a> {
     serializer: &'a mut Serializer,
     len: usize,
     index: usize,
+    state: MapState,
 }
 
 #[derive(Debug)]
@@ -52,6 +54,12 @@ impl Default for Serializer {
             symlink: IndexSet::new(),
         }
     }
+}
+
+#[derive(Debug)]
+enum MapState {
+    Key,
+    Value,
 }
 
 impl Serializer {
@@ -176,6 +184,7 @@ impl<'a> super::SerializerTrait for &'a mut Serializer {
             serializer: self,
             len,
             index: 0,
+            state: MapState::Value, // we want to enforce getting a key next so we set the state to value
         })
     }
 
@@ -220,6 +229,7 @@ impl<'a> super::SerializerTrait for &'a mut Serializer {
             serializer: self,
             len,
             index: 0,
+            state: MapState::Value, // we want to enforce getting a key next so we set the state to value
         })
     }
 
@@ -232,6 +242,7 @@ impl<'a> super::SerializerTrait for &'a mut Serializer {
             serializer: self,
             len,
             index: 0,
+            state: MapState::Value, // we want to enforce getting a key next so we set the state to value
         })
     }
 
@@ -262,6 +273,7 @@ impl<'a> super::SerializerTrait for &'a mut Serializer {
             serializer: self,
             len,
             index: 0,
+            state: MapState::Value, // we want to enforce getting a key next so we set the state to value
         })
     }
 
@@ -321,6 +333,14 @@ impl<'a> super::SerializeIvars for SerializeIvars<'a> {
                 kind: Kind::OvershotProvidedLen(self.len),
             });
         }
+        match self.state {
+            MapState::Key => {
+                return Err(Error {
+                    kind: Kind::KeyAfterKey,
+                })
+            }
+            MapState::Value => self.state = MapState::Key,
+        }
 
         self.serializer.write_symbol(k);
 
@@ -331,6 +351,14 @@ impl<'a> super::SerializeIvars for SerializeIvars<'a> {
     where
         V: crate::Serialize + ?Sized,
     {
+        match self.state {
+            MapState::Value => {
+                return Err(Error {
+                    kind: Kind::ValueAfterValue,
+                })
+            }
+            MapState::Key => self.state = MapState::Value,
+        }
         v.serialize(&mut *self.serializer)?;
 
         Ok(())
@@ -360,6 +388,14 @@ impl<'a> super::SerializeHash for SerializeHash<'a> {
                 kind: Kind::OvershotProvidedLen(self.len),
             });
         }
+        match self.state {
+            MapState::Key => {
+                return Err(Error {
+                    kind: Kind::KeyAfterKey,
+                })
+            }
+            MapState::Value => self.state = MapState::Key,
+        }
 
         k.serialize(&mut *self.serializer)?;
 
@@ -370,6 +406,14 @@ impl<'a> super::SerializeHash for SerializeHash<'a> {
     where
         V: crate::Serialize + ?Sized,
     {
+        match self.state {
+            MapState::Value => {
+                return Err(Error {
+                    kind: Kind::ValueAfterValue,
+                })
+            }
+            MapState::Key => self.state = MapState::Value,
+        }
         v.serialize(&mut *self.serializer)
     }
 

@@ -214,6 +214,11 @@ impl crate::SerializeIvars for SerializeIvars {
     type Ok = Value;
 
     fn serialize_field(&mut self, k: &Sym) -> Result<()> {
+        if self.next_field.is_some() {
+            return Err(Error {
+                kind: Kind::KeyAfterKey,
+            });
+        }
         self.next_field = Some(k.to_symbol());
         Ok(())
     }
@@ -222,8 +227,8 @@ impl crate::SerializeIvars for SerializeIvars {
     where
         V: Serialize + ?Sized,
     {
-        let field = self.next_field.take().ok_or_else(|| Error {
-            kind: Kind::Message("serialized value before field".to_string()),
+        let field = self.next_field.take().ok_or(Error {
+            kind: Kind::ValueAfterValue,
         })?;
 
         let value = v.serialize(Serializer)?;
@@ -257,6 +262,11 @@ impl crate::SerializeHash for SerializeHash {
     where
         K: Serialize + ?Sized,
     {
+        if self.next_key.is_some() {
+            return Err(Error {
+                kind: Kind::KeyAfterKey,
+            });
+        }
         let value = k.serialize(Serializer)?;
         self.next_key = Some(value);
         Ok(())
@@ -266,8 +276,8 @@ impl crate::SerializeHash for SerializeHash {
     where
         V: Serialize + ?Sized,
     {
-        let key = self.next_key.take().ok_or_else(|| Error {
-            kind: Kind::Message("serialized value before key".to_string()),
+        let key = self.next_key.take().ok_or(Error {
+            kind: Kind::ValueAfterValue,
         })?;
 
         let value = v.serialize(Serializer)?;

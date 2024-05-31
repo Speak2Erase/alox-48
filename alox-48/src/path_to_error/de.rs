@@ -4,6 +4,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+use super::{add_context, Context, Trace};
 use crate::{
     de::{DeserializeSeed, DeserializerTrait},
     ArrayAccess, DeResult, HashAccess, InstanceAccess, IvarAccess, Sym, Symbol, Visitor,
@@ -17,123 +18,10 @@ pub struct Deserializer<'trace, T> {
     trace: &'trace mut Trace,
 }
 
-/// Like a stack trace, but for deserialization.
-///
-/// This is used to track the path to an error in a deserialization.
-#[derive(Debug, Default)]
-pub struct Trace {
-    /// The context of the error.
-    ///
-    /// This will be in reverse order!
-    /// The context furthest down the stack is the first element.
-    pub context: Vec<Context>,
-}
-
 #[derive(Debug)]
 struct Wrapped<'trace, X> {
     inner: X,
     trace: &'trace mut Trace,
-}
-
-#[derive(Debug)]
-// TODO deserializer position (no clue how to do this)
-// FIXME this doesn't account for discarding errors!
-pub enum Context {
-    Nil,
-    Bool(bool),
-    Int(i32),
-    Float(f64),
-
-    Hash(usize),
-    HashKey(usize),
-    HashValue(usize),
-
-    Array(usize),
-    ArrayIndex(usize),
-
-    String(String),
-    Symbol(Symbol),
-    Regex(String, u8),
-
-    Object(Symbol, usize),
-    Struct(Symbol, usize),
-
-    FetchingField(usize),
-    Field(Option<Symbol>, usize),
-
-    Class(Symbol),
-    Module(Symbol),
-
-    Instance,
-
-    Extended(Symbol),
-    UserClass(Symbol),
-    UserData(Symbol),
-    UserMarshal(Symbol),
-    ProcessingData(Symbol),
-}
-
-impl std::fmt::Display for Trace {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for context in self.context.iter().rev() {
-            writeln!(f, "{context}")?;
-        }
-        Ok(())
-    }
-}
-
-impl std::fmt::Display for Context {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        use Context::{
-            Array, ArrayIndex, Bool, Class, Extended, FetchingField, Field, Float, Hash, HashKey,
-            HashValue, Instance, Int, Module, Nil, Object, ProcessingData, Regex, String, Struct,
-            Symbol, UserClass, UserData, UserMarshal,
-        };
-        match self {
-            Nil => write!(f, "while processing a nil"),
-            Bool(v) => write!(f, "while processing a boolean: {v}"),
-            Int(v) => write!(f, "while processing an integer: {v}"),
-            Float(v) => write!(f, "while processing a float: {v}"),
-            Hash(len) => write!(f, "while processing a hash with {len} entries",),
-            HashKey(index) => write!(f, "while processing the {index} key of a hash",),
-            HashValue(index) => write!(f, "while processing the {index} value of a hash"),
-            Array(len) => write!(f, "while processing an array with {len} elements",),
-            ArrayIndex(index) => write!(f, "while processing the {index} element of an array"),
-            String(s) => write!(f, "while processing a string: {s}"),
-            Symbol(s) => write!(f, "while processing a symbol: {s}"),
-            Regex(s, flags) => write!(f, "while processing a regex: /{s}/ {flags}"),
-            Object(class, len) => write!(
-                f,
-                "while processing an instance of {class} with {len} ivars"
-            ),
-            Struct(name, len) => write!(f, "while processing a struct of {name} with {len} ivars"),
-            FetchingField(index) => write!(f, "while fetching the {index} field"),
-            Field(Some(field), index) => {
-                write!(f, "while processing {field} (field index {index})")
-            }
-            Field(None, index) => write!(f, "while processing an invalid field at index {index}"),
-            Class(class) => write!(f, "while processing a class: {class}"),
-            Module(module) => write!(f, "while processing a module: {module}"),
-            Instance => write!(f, "while processing an instance"),
-            Extended(module) => write!(f, "while processing an object extended by {module}"),
-            UserClass(class) => write!(f, "while processing a user class: {class}"),
-            UserData(class) => write!(f, "while processing user data: {class}"),
-            UserMarshal(class) => write!(f, "while processing user marshal: {class}"),
-            ProcessingData(class) => write!(f, "while processing data: {class}"),
-        }
-    }
-}
-
-macro_rules! add_context {
-    ($erroring_expr:expr $(, $context:expr )*) => {
-        match $erroring_expr {
-            Ok(value) => Ok(value),
-            Err(err) => {
-                $( $context; )*
-                Err(err)
-            }
-        }
-    };
 }
 
 impl<'de, 'trace, T> Deserializer<'trace, T>
@@ -146,17 +34,6 @@ where
             deserializer,
             trace: track,
         }
-    }
-}
-
-impl Trace {
-    /// Create a new trace.
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    fn push(&mut self, context: Context) {
-        self.context.push(context);
     }
 }
 
@@ -384,7 +261,7 @@ where
         let wrapped = Deserializer::new(deserializer, self.trace);
         add_context!(
             self.inner.visit_data(class, wrapped),
-            self.trace.push(Context::ProcessingData(class.to_symbol()))
+            self.trace.push(Context::Data(class.to_symbol()))
         )
     }
 }

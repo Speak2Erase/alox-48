@@ -24,6 +24,10 @@ pub enum Kind {
     UndershotProvidedLen(usize),
     #[error("Custom error: {0}")]
     Message(String),
+    #[error("Tried to serialize a key without a value")]
+    KeyAfterKey,
+    #[error("Tried to serialize a value before its key")]
+    ValueAfterValue,
 }
 
 impl Error {

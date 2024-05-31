@@ -73,20 +73,24 @@ mod value;
 pub use value::{from_value, to_value, Serializer as ValueSerializer, Value};
 
 mod rb_types;
+#[doc(inline)]
 pub use rb_types::{
     Instance, Object, RbArray, RbFields, RbHash, RbString, RbStruct, Sym, Symbol, Userdata,
 };
 
+#[doc(inline)]
 pub use de::{
     ArrayAccess, Deserialize, Deserializer, DeserializerTrait, Error as DeError, HashAccess,
     InstanceAccess, IvarAccess, Result as DeResult, Visitor, VisitorInstance, VisitorOption,
 };
+#[doc(inline)]
 pub use ser::{
     ByteString as SerializeByteString, Error as SerError, Result as SerResult, Serialize,
     SerializeArray, SerializeHash, SerializeIvars, Serializer, SerializerTrait,
 };
 
 #[cfg(feature = "derive")]
+#[doc(inline)]
 pub use alox_48_derive::{Deserialize, Serialize};
 
 /// Deserialize data from some bytes.
