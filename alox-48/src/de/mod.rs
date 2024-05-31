@@ -10,6 +10,8 @@ mod ignored;
 mod impls;
 mod traits;
 
+pub use ignored::Ignored;
+
 pub use error::Result;
 pub use error::{Error, Kind, Unexpected};
 
