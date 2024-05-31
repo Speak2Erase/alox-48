@@ -138,9 +138,9 @@ impl<'a> std::fmt::Display for Unexpected<'a> {
 }
 
 impl Error {
-    pub fn custom(str: impl Into<String>) -> Self {
+    pub fn custom(str: impl std::fmt::Display) -> Self {
         Error {
-            kind: Kind::Message(str.into()),
+            kind: Kind::Message(str.to_string()),
         }
     }
 

@@ -27,9 +27,9 @@ pub enum Kind {
 }
 
 impl Error {
-    pub fn custom(message: impl Into<String>) -> Self {
+    pub fn custom(message: impl std::fmt::Display) -> Self {
         Self {
-            kind: Kind::Message(message.into()),
+            kind: Kind::Message(message.to_string()),
         }
     }
 }
