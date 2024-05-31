@@ -119,8 +119,6 @@ impl<'de> Deserializer<'de> {
     ///
     /// Will error if the input has a version number != to 4.8.
     /// The first two bytes of marshal data encode the version number. [major, minor]
-    // this function should never panic in practice as we perform bounds checking.
-    #[allow(clippy::missing_panics_doc)]
     pub fn new(input: &'de [u8]) -> Result<Self> {
         let mut cursor = Cursor::new(input);
         if input.len() < 2 {

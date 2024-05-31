@@ -43,7 +43,7 @@
 //! # In alox-48, this is not the case. Each index will be a "unique" ""object"".
 //! ```
 //!
-//! This behavior could be simulated with [`Rc`] and/or [`Arc`] like `thurgood`, however for the sake of ergonomics (and memory cycles)
+//! This behavior could be simulated with `Rc` and/or `Arc` like `thurgood`, however for the sake of ergonomics (and memory cycles)
 //! alox-48 deserializes object links as copies instead. alox-48 does not serialize object links at all.
 //!
 //! Some common terminology:
@@ -107,11 +107,8 @@ where
 /// Serialize the type into bytes.
 ///
 /// # Errors
-/// Errors if the type contains data `alox_48` does not support.
-/// These include:
-/// - Enums
-/// - Newtype Structs
-/// - Unit Structs
+///
+/// Serialization errors are uncommon, and generally result from improper `Serialize` implementations or a bug in alox-48.
 pub fn to_bytes<T>(data: T) -> Result<Vec<u8>, SerError>
 where
     T: Serialize,

@@ -95,7 +95,7 @@ pub enum Value {
     },
 }
 
-/// Interpret a `alox_48::Value` as an instance of type `T`.
+/// Interpret a `Value` as an instance of type `T`.
 ///
 /// # Example
 ///
@@ -130,7 +130,7 @@ where
     T::deserialize(value)
 }
 
-/// Convert a `T` into `alox_48::Value`.
+/// Convert a `T` into `Value`.
 ///
 /// # Example
 ///

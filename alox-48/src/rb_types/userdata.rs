@@ -9,7 +9,7 @@ use crate::{
 };
 
 /// This type represents types serialized with `_dump` from ruby.
-/// Its main intended use is in [`Value`], but you can also use it with [`alox_48::Deserialize`]:
+/// Its main intended use is in `Value`, but you can also use it with `Deserialize`:
 ///
 /// ```
 /// #[derive(alox_48::Deserialize, Debug, PartialEq, Eq)]

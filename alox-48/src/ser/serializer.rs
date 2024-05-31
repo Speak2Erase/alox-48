@@ -11,12 +11,6 @@ use super::{Error, Kind, Result};
 use crate::{tag::Tag, Sym, Symbol};
 
 /// The `alox_48` serializer.
-///
-/// `alox_48` does not support some data types.
-/// These include:
-/// - Enums
-/// - Newtype Structs
-/// - Unit Structs
 #[derive(Debug, Clone)]
 pub struct Serializer {
     /// The underlying output of the serializer.

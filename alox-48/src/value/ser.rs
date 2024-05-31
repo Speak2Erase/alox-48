@@ -42,9 +42,9 @@ impl Serialize for Value {
 
 /// Serializer whose output is a `Value`.
 ///
-/// This is the serializer that backs [`alox_48::value::to_value`].
+/// This is the serializer that backs `to_value`.
 /// Unlike the main alox-48 serializer which goes from some value of `T` to binary data,
-/// this one goes from `T` to `alox_48::value::Value`.
+/// this one goes from `T` to `Value`.
 #[derive(Clone, Copy, Debug)]
 pub struct Serializer;
 
