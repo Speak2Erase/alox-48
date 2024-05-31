@@ -55,6 +55,11 @@ pub enum Kind {
     /// A custom error thrown by a visitor.
     #[error("{0}")]
     Message(String),
+
+    #[error("Tried to deserialize a key without a value")]
+    KeyAfterKey,
+    #[error("Tried to deserialize a value before its key")]
+    ValueAfterValue,
 }
 
 fn unknown_tag_to_char(tag: u8) -> char {

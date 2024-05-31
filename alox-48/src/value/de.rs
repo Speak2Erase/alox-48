@@ -4,7 +4,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 use crate::{
-    de::{DeserializeSeed, Error, Result},
+    de::{DeserializeSeed, Error, Kind, Result},
     ArrayAccess, Deserialize, DeserializerTrait, HashAccess, Instance, InstanceAccess, IvarAccess,
     Object, RbFields, RbHash, RbString, Sym, Userdata, Value, Visitor, VisitorInstance,
     VisitorOption,
@@ -196,6 +196,7 @@ struct ValueInstanceAccess<'de> {
 struct ValueIVarAccess<'de> {
     fields: &'de RbFields,
     index: usize,
+    state: MapState,
 }
 
 struct ValueArrayAccess<'de> {
@@ -206,6 +207,12 @@ struct ValueArrayAccess<'de> {
 struct ValueHashAccess<'de> {
     hash: &'de RbHash,
     index: usize,
+    state: MapState,
+}
+
+enum MapState {
+    Key,
+    Value,
 }
 
 impl<'de> DeserializerTrait<'de> for &'de Value {
@@ -221,13 +228,18 @@ impl<'de> DeserializerTrait<'de> for &'de Value {
             Value::String(s) => visitor.visit_string(&s.data),
             Value::Symbol(s) => visitor.visit_symbol(s),
             Value::Array(array) => visitor.visit_array(ValueArrayAccess { array, index: 0 }),
-            Value::Hash(hash) => visitor.visit_hash(ValueHashAccess { hash, index: 0 }),
+            Value::Hash(hash) => visitor.visit_hash(ValueHashAccess {
+                hash,
+                index: 0,
+                state: MapState::Value, // we want to enforce getting a key next so we set the state to value
+            }),
             Value::Userdata(u) => visitor.visit_user_data(&u.class, &u.data),
             Value::Object(o) => visitor.visit_object(
                 &o.class,
                 ValueIVarAccess {
                     fields: &o.fields,
                     index: 0,
+                    state: MapState::Value, // we want to enforce getting a key next so we set the state to value
                 },
             ),
             Value::Instance(i) => visitor.visit_instance(ValueInstanceAccess {
@@ -240,6 +252,7 @@ impl<'de> DeserializerTrait<'de> for &'de Value {
                 ValueIVarAccess {
                     fields: &s.fields,
                     index: 0,
+                    state: MapState::Value, // we want to enforce getting a key next so we set the state to value
                 },
             ),
             Value::Class(c) => visitor.visit_class(c),
@@ -290,6 +303,7 @@ impl<'de> InstanceAccess<'de> for ValueInstanceAccess<'de> {
         let access = ValueIVarAccess {
             fields: self.fields,
             index: 0,
+            state: MapState::Value, // we want to enforce getting a key next so we set the state to value
         };
         Ok((value, access))
     }
@@ -302,6 +316,7 @@ impl<'de> InstanceAccess<'de> for ValueInstanceAccess<'de> {
         let access = ValueIVarAccess {
             fields: self.fields,
             index: 0,
+            state: MapState::Value, // we want to enforce getting a key next so we set the state to value
         };
         Ok((value, access))
     }
@@ -312,6 +327,16 @@ impl<'de> IvarAccess<'de> for ValueIVarAccess<'de> {
         let Some((field, _)) = self.fields.get_index(self.index) else {
             return Ok(None);
         };
+
+        match self.state {
+            MapState::Key => {
+                return Err(Error {
+                    kind: Kind::KeyAfterKey,
+                })
+            }
+            MapState::Value => self.state = MapState::Key,
+        }
+
         Ok(Some(field))
     }
 
@@ -319,10 +344,10 @@ impl<'de> IvarAccess<'de> for ValueIVarAccess<'de> {
     where
         V: DeserializeSeed<'de>,
     {
-        let (_, value) = self
-            .fields
-            .get_index(self.index)
-            .ok_or_else(|| Error::custom("out of values".to_string()))?;
+        let (_, value) = self.fields.get_index(self.index).ok_or(Error {
+            kind: Kind::ValueAfterValue,
+        })?;
+        self.state = MapState::Value;
         self.index += 1;
 
         seed.deserialize(value)
@@ -366,6 +391,16 @@ impl<'de> HashAccess<'de> for ValueHashAccess<'de> {
         let Some((key, _)) = self.hash.get_index(self.index) else {
             return Ok(None);
         };
+
+        match self.state {
+            MapState::Key => {
+                return Err(Error {
+                    kind: Kind::KeyAfterKey,
+                })
+            }
+            MapState::Value => self.state = MapState::Key,
+        }
+
         seed.deserialize(key).map(Some)
     }
 
@@ -373,10 +408,10 @@ impl<'de> HashAccess<'de> for ValueHashAccess<'de> {
     where
         V: DeserializeSeed<'de>,
     {
-        let (_, value) = self
-            .hash
-            .get_index(self.index)
-            .ok_or_else(|| Error::custom("out of values".to_string()))?;
+        let (_, value) = self.hash.get_index(self.index).ok_or(Error {
+            kind: Kind::ValueAfterValue,
+        })?;
+        self.state = MapState::Value;
         self.index += 1;
 
         seed.deserialize(value)

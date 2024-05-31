@@ -43,6 +43,7 @@ struct IvarAccess<'de, 'a> {
     deserializer: &'a mut Deserializer<'de>,
     len: usize,
     index: &'a mut usize,
+    state: MapState,
 }
 
 struct ArrayAccess<'de, 'a> {
@@ -55,6 +56,12 @@ struct HashAccess<'de, 'a> {
     deserializer: &'a mut Deserializer<'de>,
     len: usize,
     index: &'a mut usize,
+    state: MapState,
+}
+
+enum MapState {
+    Key,
+    Value,
 }
 
 impl<'de> Cursor<'de> {
@@ -341,6 +348,7 @@ impl<'de, 'a> super::DeserializerTrait<'de> for &'a mut Deserializer<'de> {
                     deserializer: self,
                     len,
                     index: &mut index,
+                    state: MapState::Value, // we want to enforce getting a key next so we set the state to value
                 })?;
 
                 // Deserialize remaining elements that weren't deserialized
@@ -389,6 +397,7 @@ impl<'de, 'a> super::DeserializerTrait<'de> for &'a mut Deserializer<'de> {
                         deserializer: self,
                         len,
                         index: &mut index,
+                        state: MapState::Value, // we want to enforce getting a key next so we set the state to value
                     },
                 )?;
 
@@ -435,6 +444,7 @@ impl<'de, 'a> super::DeserializerTrait<'de> for &'a mut Deserializer<'de> {
                     deserializer: self,
                     len,
                     index: &mut index,
+                    state: MapState::Value, // we want to enforce getting a key next so we set the state to value
                 });
 
                 // Deserialize remaining elements that weren't deserialized
@@ -496,6 +506,7 @@ impl<'de, 'a> super::DeserializerTrait<'de> for &'a mut Deserializer<'de> {
                         deserializer: self,
                         len,
                         index: &mut index,
+                        state: MapState::Value, // we want to enforce getting a key next so we set the state to value
                     },
                 )?;
 
@@ -580,6 +591,7 @@ impl<'de, 'a> super::InstanceAccess<'de> for &'a mut InstanceAccess<'de, 'a> {
                 deserializer: &mut *self.deserializer,
                 len,
                 index: self.index,
+                state: MapState::Value, // we want to enforce getting a key next so we set the state to value
             },
         ))
     }
@@ -599,6 +611,7 @@ impl<'de, 'a> super::InstanceAccess<'de> for &'a mut InstanceAccess<'de, 'a> {
                 deserializer: &mut *self.deserializer,
                 len,
                 index: self.index,
+                state: MapState::Value, // we want to enforce getting a key next so we set the state to value
             },
         ))
     }
@@ -609,6 +622,16 @@ impl<'de, 'a> super::IvarAccess<'de> for IvarAccess<'de, 'a> {
         if *self.index >= self.len {
             return Ok(None);
         }
+
+        match self.state {
+            MapState::Key => {
+                return Err(Error {
+                    kind: Kind::KeyAfterKey,
+                })
+            }
+            MapState::Value => self.state = MapState::Key,
+        }
+
         *self.index += 1;
 
         self.deserializer.read_symbol_either().map(Some)
@@ -618,6 +641,15 @@ impl<'de, 'a> super::IvarAccess<'de> for IvarAccess<'de, 'a> {
     where
         V: DeserializeSeed<'de>,
     {
+        match self.state {
+            MapState::Value => {
+                return Err(Error {
+                    kind: Kind::ValueAfterValue,
+                })
+            }
+            MapState::Key => self.state = MapState::Value,
+        }
+
         seed.deserialize(&mut *self.deserializer)
     }
 
@@ -660,6 +692,16 @@ impl<'de, 'a> super::HashAccess<'de> for HashAccess<'de, 'a> {
         if *self.index >= self.len {
             return Ok(None);
         }
+
+        match self.state {
+            MapState::Key => {
+                return Err(Error {
+                    kind: Kind::KeyAfterKey,
+                })
+            }
+            MapState::Value => self.state = MapState::Key,
+        }
+
         *self.index += 1;
 
         seed.deserialize(&mut *self.deserializer).map(Some)
@@ -669,6 +711,15 @@ impl<'de, 'a> super::HashAccess<'de> for HashAccess<'de, 'a> {
     where
         V: DeserializeSeed<'de>,
     {
+        match self.state {
+            MapState::Value => {
+                return Err(Error {
+                    kind: Kind::ValueAfterValue,
+                })
+            }
+            MapState::Key => self.state = MapState::Value,
+        }
+
         seed.deserialize(&mut *self.deserializer)
     }
 
