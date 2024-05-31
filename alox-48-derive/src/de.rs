@@ -148,7 +148,9 @@ fn parse_struct(
         }
     } else {
         quote! {
-            _ => {}
+            _ => {
+                let _ = _instance_variables.next_value::<_alox_48::de::Ignored>()?;
+            }
         }
     };
     let default = reciever.default_fn.as_ref().map(|d| {
@@ -329,7 +331,7 @@ fn parse_field(reciever_has_default: bool, field: &FieldReciever) -> ParseResult
     let match_field = if skip {
         quote! {
             #field_lit_str => {
-                let ignored = _instance_variables.next_value::<_alox_48::de::Ignored>()?;
+                let _ = _instance_variables.next_value::<_alox_48::de::Ignored>()?;
                 // skipped
             }
         }
