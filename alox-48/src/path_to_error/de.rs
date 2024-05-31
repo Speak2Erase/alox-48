@@ -6,7 +6,7 @@
 
 use crate::{
     de::{DeserializeSeed, DeserializerTrait},
-    ArrayAccess, DeError, DeResult, HashAccess, InstanceAccess, IvarAccess, Sym, Symbol, Visitor,
+    ArrayAccess, DeResult, HashAccess, InstanceAccess, IvarAccess, Sym, Symbol, Visitor,
     VisitorInstance, VisitorOption,
 };
 

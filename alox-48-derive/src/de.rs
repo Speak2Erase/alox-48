@@ -4,7 +4,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use darling::FromDeriveInput;
+use darling::{util::Override, FromDeriveInput};
 use itertools::Itertools;
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -357,15 +357,21 @@ fn parse_field(reciever_has_default: bool, field: &FieldReciever) -> ParseResult
         }
     };
 
-    let instantiate_field = if let Some(default_fn) = field.default_fn.as_ref() {
-        if let Some(p) = default_fn.as_ref().explicit() {
-            quote! { #field_ident: #let_var_ident.unwrap_or(#p()) }
-        } else {
-            quote! { #field_ident: #let_var_ident.unwrap_or(<#field_ty as Default>::default()) }
+    let instantiate_default = match field.default_fn.as_ref() {
+        Some(Override::Explicit(default_fn)) => {
+            Some(quote! { #let_var_ident.unwrap_or(#default_fn()) })
         }
-    } else if reciever_has_default {
+        Some(_) => Some(quote! { #let_var_ident.unwrap_or(<#field_ty as Default>::default()) }),
+        None if skip => Some(quote! { <#field_ty as Default>::default() }),
+        None if reciever_has_default => Some(quote! {
+            #let_var_ident.unwrap_or(default.#field_ident)
+        }),
+        None => None,
+    };
+
+    let instantiate_field = if let Some(instantiate_default) = instantiate_default {
         quote! {
-            #field_ident: #let_var_ident.unwrap_or(default.#field_ident)
+            #field_ident: #instantiate_default
         }
     } else {
         quote! {
