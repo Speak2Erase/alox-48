@@ -17,10 +17,24 @@ use std::{
 };
 
 use super::{
-    traits::VisitorOption, ArrayAccess, Deserialize, DeserializerTrait, Error, HashAccess, Result,
-    Unexpected, Visitor,
+    traits::VisitorOption, ArrayAccess, Deserialize, DeserializeSeed, DeserializerTrait, Error,
+    HashAccess, Result, Unexpected, Visitor,
 };
 use crate::Sym;
+
+impl<'de, T> DeserializeSeed<'de> for PhantomData<T>
+where
+    T: Deserialize<'de>,
+{
+    type Value = T;
+
+    fn deserialize<D>(self, deserializer: D) -> Result<Self::Value>
+    where
+        D: DeserializerTrait<'de>,
+    {
+        T::deserialize(deserializer)
+    }
+}
 
 struct IntVisitor;
 

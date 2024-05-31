@@ -28,7 +28,7 @@ pub enum Kind {
     #[error("Unexpected negative length {0}")]
     UnexpectedNegativeLength(i32),
     /// Unrecognized tag was encountered.
-    #[error("Wrong tag {0}")]
+    #[error("Wrong tag 0x{0:X} ({})", unknown_tag_to_char(*_0))]
     WrongTag(u8),
     /// A symbol was invalid utf8.
     /// All symbols in ruby should be valid.
@@ -47,14 +47,22 @@ pub enum Kind {
     #[error("Expected a symbol got {0:?}")]
     ExpectedSymbol(Tag),
     /// End of input.
-    #[error("End of input.")]
+    #[error("End of input")]
     Eof,
     /// Version mismatch.
     #[error("Version error, expected [4, 8], got {0:?}")]
     VersionError([u8; 2]),
     /// A custom error thrown by a visitor.
-    #[error("Custom error: {0}")]
+    #[error("{0}")]
     Message(String),
+}
+
+fn unknown_tag_to_char(tag: u8) -> char {
+    if tag.is_ascii() && !(tag.is_ascii_control() || tag.is_ascii_whitespace()) {
+        tag as char
+    } else {
+        '.'
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]

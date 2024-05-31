@@ -4,7 +4,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 use crate::{
-    de::{Error, Result},
+    de::{DeserializeSeed, Error, Result},
     ArrayAccess, Deserialize, DeserializerTrait, HashAccess, Instance, InstanceAccess, IvarAccess,
     Object, RbFields, RbHash, RbString, Sym, Userdata, Value, Visitor, VisitorInstance,
     VisitorOption,
@@ -294,11 +294,11 @@ impl<'de> InstanceAccess<'de> for ValueInstanceAccess<'de> {
         Ok((value, access))
     }
 
-    fn value_deserialize<T>(self) -> Result<(T, Self::IvarAccess)>
+    fn value_deserialize_seed<V>(self, seed: V) -> Result<(V::Value, Self::IvarAccess)>
     where
-        T: Deserialize<'de>,
+        V: DeserializeSeed<'de>,
     {
-        let value = T::deserialize(self.value)?;
+        let value = seed.deserialize(self.value)?;
         let access = ValueIVarAccess {
             fields: self.fields,
             index: 0,
@@ -315,9 +315,9 @@ impl<'de> IvarAccess<'de> for ValueIVarAccess<'de> {
         Ok(Some(field))
     }
 
-    fn next_value<T>(&mut self) -> Result<T>
+    fn next_value_seed<V>(&mut self, seed: V) -> Result<V::Value>
     where
-        T: Deserialize<'de>,
+        V: DeserializeSeed<'de>,
     {
         let (_, value) = self
             .fields
@@ -325,7 +325,7 @@ impl<'de> IvarAccess<'de> for ValueIVarAccess<'de> {
             .ok_or_else(|| Error::custom("out of values".to_string()))?;
         self.index += 1;
 
-        T::deserialize(value)
+        seed.deserialize(value)
     }
 
     fn len(&self) -> usize {
@@ -338,15 +338,15 @@ impl<'de> IvarAccess<'de> for ValueIVarAccess<'de> {
 }
 
 impl<'de> ArrayAccess<'de> for ValueArrayAccess<'de> {
-    fn next_element<T>(&mut self) -> Result<Option<T>>
+    fn next_element_seed<V>(&mut self, seed: V) -> Result<Option<V::Value>>
     where
-        T: Deserialize<'de>,
+        V: DeserializeSeed<'de>,
     {
         let Some(value) = self.array.get(self.index) else {
             return Ok(None);
         };
         self.index += 1;
-        T::deserialize(value).map(Some)
+        seed.deserialize(value).map(Some)
     }
 
     fn len(&self) -> usize {
@@ -359,19 +359,19 @@ impl<'de> ArrayAccess<'de> for ValueArrayAccess<'de> {
 }
 
 impl<'de> HashAccess<'de> for ValueHashAccess<'de> {
-    fn next_key<K>(&mut self) -> Result<Option<K>>
+    fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>>
     where
-        K: Deserialize<'de>,
+        K: DeserializeSeed<'de>,
     {
         let Some((key, _)) = self.hash.get_index(self.index) else {
             return Ok(None);
         };
-        K::deserialize(key).map(Some)
+        seed.deserialize(key).map(Some)
     }
 
-    fn next_value<T>(&mut self) -> Result<T>
+    fn next_value_seed<V>(&mut self, seed: V) -> Result<V::Value>
     where
-        T: Deserialize<'de>,
+        V: DeserializeSeed<'de>,
     {
         let (_, value) = self
             .hash
@@ -379,7 +379,7 @@ impl<'de> HashAccess<'de> for ValueHashAccess<'de> {
             .ok_or_else(|| Error::custom("out of values".to_string()))?;
         self.index += 1;
 
-        T::deserialize(value)
+        seed.deserialize(value)
     }
 
     fn len(&self) -> usize {

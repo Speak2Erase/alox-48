@@ -11,13 +11,13 @@
 
 use std::collections::BTreeSet;
 
-use super::{ignored::Ignored, Error, Kind, Result};
+use super::{ignored::Ignored, DeserializeSeed, Error, Kind, Result};
 use crate::{tag::Tag, Deserialize, DeserializerTrait, Sym, Visitor};
 
 /// The alox-48 deserializer.
 #[derive(Debug, Clone)]
 pub struct Deserializer<'de> {
-    cursor: Cursor<'de>,
+    pub(crate) cursor: Cursor<'de>,
 
     objtable: Vec<usize>,
     stack: Vec<usize>,
@@ -27,9 +27,9 @@ pub struct Deserializer<'de> {
 }
 
 #[derive(Debug, Clone)]
-struct Cursor<'de> {
-    input: &'de [u8],
-    position: usize,
+pub(crate) struct Cursor<'de> {
+    pub(crate) input: &'de [u8],
+    pub(crate) position: usize,
 }
 
 struct InstanceAccess<'de, 'a> {
@@ -150,6 +150,13 @@ impl<'de> Deserializer<'de> {
     /// This is useful for debugging.
     pub fn current_position(&self) -> usize {
         self.cursor.position
+    }
+
+    /// Returns the data that the deserializer is reading from.
+    ///
+    /// This is useful for debugging.
+    pub fn data(&self) -> &'de [u8] {
+        self.cursor.input
     }
 
     fn read_packed_int(&mut self) -> Result<i32> {
@@ -577,11 +584,11 @@ impl<'de, 'a> super::InstanceAccess<'de> for &'a mut InstanceAccess<'de, 'a> {
         ))
     }
 
-    fn value_deserialize<T>(self) -> Result<(T, Self::IvarAccess)>
+    fn value_deserialize_seed<V>(self, seed: V) -> Result<(V::Value, Self::IvarAccess)>
     where
-        T: Deserialize<'de>,
+        V: DeserializeSeed<'de>,
     {
-        let result = T::deserialize(&mut *self.deserializer)?;
+        let result = seed.deserialize(&mut *self.deserializer)?;
 
         let len = self.deserializer.read_usize()?;
         *self.len = len;
@@ -607,11 +614,11 @@ impl<'de, 'a> super::IvarAccess<'de> for IvarAccess<'de, 'a> {
         self.deserializer.read_symbol_either().map(Some)
     }
 
-    fn next_value<T>(&mut self) -> Result<T>
+    fn next_value_seed<V>(&mut self, seed: V) -> Result<V::Value>
     where
-        T: Deserialize<'de>,
+        V: DeserializeSeed<'de>,
     {
-        T::deserialize(&mut *self.deserializer)
+        seed.deserialize(&mut *self.deserializer)
     }
 
     fn len(&self) -> usize {
@@ -624,16 +631,16 @@ impl<'de, 'a> super::IvarAccess<'de> for IvarAccess<'de, 'a> {
 }
 
 impl<'de, 'a> super::ArrayAccess<'de> for ArrayAccess<'de, 'a> {
-    fn next_element<T>(&mut self) -> Result<Option<T>>
+    fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>>
     where
-        T: Deserialize<'de>,
+        T: DeserializeSeed<'de>,
     {
         if *self.index >= self.len {
             return Ok(None);
         }
         *self.index += 1;
 
-        T::deserialize(&mut *self.deserializer).map(Some)
+        seed.deserialize(&mut *self.deserializer).map(Some)
     }
 
     fn len(&self) -> usize {
@@ -646,23 +653,23 @@ impl<'de, 'a> super::ArrayAccess<'de> for ArrayAccess<'de, 'a> {
 }
 
 impl<'de, 'a> super::HashAccess<'de> for HashAccess<'de, 'a> {
-    fn next_key<K>(&mut self) -> Result<Option<K>>
+    fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>>
     where
-        K: Deserialize<'de>,
+        K: DeserializeSeed<'de>,
     {
         if *self.index >= self.len {
             return Ok(None);
         }
         *self.index += 1;
 
-        K::deserialize(&mut *self.deserializer).map(Some)
+        seed.deserialize(&mut *self.deserializer).map(Some)
     }
 
-    fn next_value<V>(&mut self) -> Result<V>
+    fn next_value_seed<V>(&mut self, seed: V) -> Result<V::Value>
     where
-        V: Deserialize<'de>,
+        V: DeserializeSeed<'de>,
     {
-        V::deserialize(&mut *self.deserializer)
+        seed.deserialize(&mut *self.deserializer)
     }
 
     fn len(&self) -> usize {

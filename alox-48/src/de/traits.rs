@@ -5,11 +5,25 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 use super::{error::Unexpected, Error, Result};
 use crate::Sym;
+use std::marker::PhantomData;
 
 /// A structure that can be deserialized from ruby marshal format.
 pub trait Deserialize<'de>: Sized {
     /// Deserialize this value from the given deserializer.
     fn deserialize<D>(deserializer: D) -> Result<Self>
+    where
+        D: Deserializer<'de>;
+}
+
+/// A stateful form of `Deserialize`- useful when you need to pass data into a Deserialize impl.
+pub trait DeserializeSeed<'de>: Sized {
+    /// The value that will be produced.
+    type Value;
+
+    /// Deserialize this value from the given deserializer.
+    ///
+    /// Equivalent to `Deserialize::deserialize`, but with data passed in.
+    fn deserialize<D>(self, deserializer: D) -> Result<Self::Value>
     where
         D: Deserializer<'de>;
 }
@@ -184,7 +198,7 @@ pub trait Visitor<'de>: Sized {
 
 /// This trait represents a visitor that walks through a deserializer.
 ///
-/// It's speciailized for deserializing optional values.
+/// It's specialized for deserializing optional values.
 // todo investigate other ways of doing this
 pub trait VisitorOption<'de> {
     /// The type that this visitor will produce.
@@ -229,12 +243,22 @@ pub trait InstanceAccess<'de>: Sized {
     where
         V: Visitor<'de>;
 
+    /// Deserialize the value of the instance, using the given seed.
+    ///
+    /// This allows you to pass data in when deserializing the value.
+    fn value_deserialize_seed<V>(self, seed: V) -> Result<(V::Value, Self::IvarAccess)>
+    where
+        V: DeserializeSeed<'de>;
+
     /// Deserialize the value of the instance.
     ///
     /// This is a convenience method to deserialize a value without its visitor.
     fn value_deserialize<T>(self) -> Result<(T, Self::IvarAccess)>
     where
-        T: Deserialize<'de>;
+        T: Deserialize<'de>,
+    {
+        self.value_deserialize_seed(PhantomData::<T>)
+    }
 }
 
 /// Provides access to instance variables.
@@ -247,9 +271,33 @@ pub trait IvarAccess<'de> {
     /// Get the next value.
     ///
     /// This should be called after `next_ivar`.
+    fn next_value_seed<V>(&mut self, seed: V) -> Result<V::Value>
+    where
+        V: DeserializeSeed<'de>;
+
+    /// Get the next value.
+    ///
+    /// This should be called after `next_ivar`.
     fn next_value<T>(&mut self) -> Result<T>
     where
-        T: Deserialize<'de>;
+        T: Deserialize<'de>,
+    {
+        self.next_value_seed(PhantomData::<T>)
+    }
+
+    /// Get the next instance variable and value.
+    ///
+    /// Returns `None` if there are no more instance variables.
+    fn next_entry_seed<V>(&mut self, seed: V) -> Result<Option<(&'de Sym, V::Value)>>
+    where
+        V: DeserializeSeed<'de>,
+    {
+        if let Some(var) = self.next_ivar()? {
+            self.next_value_seed(seed).map(|v| Some((var, v)))
+        } else {
+            Ok(None)
+        }
+    }
 
     /// Get the next instance variable and value.
     ///
@@ -258,11 +306,7 @@ pub trait IvarAccess<'de> {
     where
         T: Deserialize<'de>,
     {
-        if let Some(var) = self.next_ivar()? {
-            self.next_value().map(|v| Some((var, v)))
-        } else {
-            Ok(None)
-        }
+        self.next_entry_seed(PhantomData::<T>)
     }
 
     /// Get the number of instance variables.
@@ -282,16 +326,53 @@ pub trait HashAccess<'de> {
     /// Get the next key.
     ///
     /// Returns `None` if there are no more keys.
+    fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>>
+    where
+        K: DeserializeSeed<'de>;
+
+    /// Get the next value.
+    ///
+    /// This should be called after `next_key`.
+    fn next_value_seed<V>(&mut self, seed: V) -> Result<V::Value>
+    where
+        V: DeserializeSeed<'de>;
+
+    /// Get the next key.
+    ///
+    /// Returns `None` if there are no more keys.
     fn next_key<K>(&mut self) -> Result<Option<K>>
     where
-        K: Deserialize<'de>;
+        K: Deserialize<'de>,
+    {
+        self.next_key_seed(PhantomData::<K>)
+    }
 
     /// Get the next value.
     ///
     /// This should be called after `next_key`.
     fn next_value<V>(&mut self) -> Result<V>
     where
-        V: Deserialize<'de>;
+        V: Deserialize<'de>,
+    {
+        self.next_value_seed(PhantomData::<V>)
+    }
+
+    /// Get the next key and value.
+    fn next_entry_seed<K, V>(
+        &mut self,
+        key_seed: K,
+        value_seed: V,
+    ) -> Result<Option<(K::Value, V::Value)>>
+    where
+        K: DeserializeSeed<'de>,
+        V: DeserializeSeed<'de>,
+    {
+        if let Some(k) = self.next_key_seed(key_seed)? {
+            self.next_value_seed(value_seed).map(|v| Some((k, v)))
+        } else {
+            Ok(None)
+        }
+    }
 
     /// Get the next key and value.
     fn next_entry<K, V>(&mut self) -> Result<Option<(K, V)>>
@@ -299,11 +380,7 @@ pub trait HashAccess<'de> {
         K: Deserialize<'de>,
         V: Deserialize<'de>,
     {
-        if let Some(k) = self.next_key()? {
-            self.next_value().map(|v| Some((k, v)))
-        } else {
-            Ok(None)
-        }
+        self.next_entry_seed(PhantomData::<K>, PhantomData::<V>)
     }
 
     /// Get the number of elements.
@@ -321,9 +398,17 @@ pub trait HashAccess<'de> {
 /// Provides access to array elements.
 pub trait ArrayAccess<'de> {
     /// Get the next element.
+    fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>>
+    where
+        T: DeserializeSeed<'de>;
+
+    /// Get the next element.
     fn next_element<T>(&mut self) -> Result<Option<T>>
     where
-        T: Deserialize<'de>;
+        T: Deserialize<'de>,
+    {
+        self.next_element_seed(PhantomData::<T>)
+    }
 
     /// Get the number of elements.
     fn len(&self) -> usize;
@@ -345,11 +430,11 @@ where
         (**self).next_ivar()
     }
 
-    fn next_value<T>(&mut self) -> Result<T>
+    fn next_value_seed<V>(&mut self, seed: V) -> Result<V::Value>
     where
-        T: Deserialize<'de>,
+        V: DeserializeSeed<'de>,
     {
-        (**self).next_value()
+        (**self).next_value_seed(seed)
     }
 
     fn next_entry<T>(&mut self) -> Result<Option<(&'de Sym, T)>>
@@ -372,6 +457,13 @@ impl<'de, 'a, A> HashAccess<'de> for &'a mut A
 where
     A: HashAccess<'de>,
 {
+    fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>>
+    where
+        K: DeserializeSeed<'de>,
+    {
+        (**self).next_key_seed(seed)
+    }
+
     fn next_key<K>(&mut self) -> Result<Option<K>>
     where
         K: Deserialize<'de>,
@@ -379,11 +471,30 @@ where
         (**self).next_key()
     }
 
+    fn next_value_seed<V>(&mut self, seed: V) -> Result<V::Value>
+    where
+        V: DeserializeSeed<'de>,
+    {
+        (**self).next_value_seed(seed)
+    }
+
     fn next_value<V>(&mut self) -> Result<V>
     where
         V: Deserialize<'de>,
     {
         (**self).next_value()
+    }
+
+    fn next_entry_seed<K, V>(
+        &mut self,
+        key_seed: K,
+        value_seed: V,
+    ) -> Result<Option<(K::Value, V::Value)>>
+    where
+        K: DeserializeSeed<'de>,
+        V: DeserializeSeed<'de>,
+    {
+        (**self).next_entry_seed(key_seed, value_seed)
     }
 
     fn next_entry<K, V>(&mut self) -> Result<Option<(K, V)>>
@@ -407,6 +518,13 @@ impl<'de, 'a, A> ArrayAccess<'de> for &'a mut A
 where
     A: ArrayAccess<'de>,
 {
+    fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>>
+    where
+        T: DeserializeSeed<'de>,
+    {
+        (**self).next_element_seed(seed)
+    }
+
     fn next_element<T>(&mut self) -> Result<Option<T>>
     where
         T: Deserialize<'de>,
