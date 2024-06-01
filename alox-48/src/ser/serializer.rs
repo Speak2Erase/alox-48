@@ -324,7 +324,7 @@ impl<'a> super::SerializeIvars for SerializeIvars<'a> {
         self.index += 1;
         if self.index > self.len {
             return Err(Error {
-                kind: Kind::OvershotProvidedLen(self.len),
+                kind: Kind::OvershotProvidedLen(self.index, self.len),
             });
         }
         match self.state {
@@ -361,7 +361,7 @@ impl<'a> super::SerializeIvars for SerializeIvars<'a> {
     fn end(self) -> Result<Self::Ok> {
         if self.index < self.len {
             Err(Error {
-                kind: Kind::UndershotProvidedLen(self.len),
+                kind: Kind::UndershotProvidedLen(self.index, self.len),
             })
         } else {
             Ok(())
@@ -379,7 +379,7 @@ impl<'a> super::SerializeHash for SerializeHash<'a> {
         self.index += 1;
         if self.index > self.len {
             return Err(Error {
-                kind: Kind::OvershotProvidedLen(self.len),
+                kind: Kind::OvershotProvidedLen(self.index, self.len),
             });
         }
         match self.state {
@@ -414,7 +414,7 @@ impl<'a> super::SerializeHash for SerializeHash<'a> {
     fn end(self) -> Result<Self::Ok> {
         if self.index < self.len {
             Err(Error {
-                kind: Kind::UndershotProvidedLen(self.len),
+                kind: Kind::UndershotProvidedLen(self.index, self.len),
             })
         } else {
             Ok(())
@@ -436,7 +436,7 @@ impl<'a> super::SerializeArray for SerializeArray<'a> {
     fn end(self) -> Result<Self::Ok> {
         if self.index < self.len {
             Err(Error {
-                kind: Kind::UndershotProvidedLen(self.len),
+                kind: Kind::UndershotProvidedLen(self.index, self.len),
             })
         } else {
             Ok(())

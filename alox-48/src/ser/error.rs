@@ -18,10 +18,10 @@ pub struct Error {
 /// Error type for this crate.
 #[derive(Debug, thiserror::Error)]
 pub enum Kind {
-    #[error("Overshot the provided len: {0}")]
-    OvershotProvidedLen(usize),
-    #[error("Undershot the provided len: {0}")]
-    UndershotProvidedLen(usize),
+    #[error("Overshot the provided len {0} > {0}")]
+    OvershotProvidedLen(usize, usize),
+    #[error("Undershot the provided len {0} < {0}")]
+    UndershotProvidedLen(usize, usize),
     #[error("Custom error: {0}")]
     Message(String),
     #[error("Tried to serialize a key without a value")]
