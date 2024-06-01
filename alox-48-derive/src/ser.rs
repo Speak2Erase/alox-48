@@ -5,6 +5,7 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 use darling::FromDeriveInput;
+use itertools::Itertools;
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{spanned::Spanned, Ident, LitInt, LitStr};
@@ -100,8 +101,12 @@ fn parse_struct(
 
     let classname = reciever.class.clone().unwrap_or_else(|| ty.to_string());
 
-    let field_impls = fields.iter().map(parse_field);
-    let fields_len = format!("{}_usize", fields.len());
+    let field_impls = fields
+        .iter()
+        .filter(|field| !(field.skip.is_present() || field.skip_serializing.is_present()))
+        .map(parse_field)
+        .collect_vec();
+    let fields_len = format!("{}_usize", field_impls.len());
     let fields_len = LitInt::new(&fields_len, ty.span());
 
     quote! {
@@ -140,11 +145,6 @@ fn parse_newtype_struct(reciever: &TypeReciever) -> TokenStream {
 
 type ParseResult = TokenStream;
 fn parse_field(field: &FieldReciever) -> ParseResult {
-    let skip = field.skip.is_present() || field.skip_serializing.is_present();
-    if skip {
-        return quote! {};
-    }
-
     let field_ident = field.ident.as_ref().unwrap();
     let field_ty = field.ty.clone();
 

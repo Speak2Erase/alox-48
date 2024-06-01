@@ -18,9 +18,9 @@ pub struct Error {
 /// Error type for this crate.
 #[derive(Debug, thiserror::Error)]
 pub enum Kind {
-    #[error("Overshot the provided len {0} > {0}")]
+    #[error("Overshot the provided len {0} > {1}")]
     OvershotProvidedLen(usize, usize),
-    #[error("Undershot the provided len {0} < {0}")]
+    #[error("Undershot the provided len {0} < {1}")]
     UndershotProvidedLen(usize, usize),
     #[error("Custom error: {0}")]
     Message(String),
