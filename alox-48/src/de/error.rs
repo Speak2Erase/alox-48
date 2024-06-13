@@ -60,6 +60,8 @@ pub enum Kind {
     KeyAfterKey,
     #[error("Tried to deserialize a value before its key")]
     ValueAfterValue,
+    #[error("A circular reference was detected while deserializing an object link")]
+    CircularReference,
 }
 
 fn unknown_tag_to_char(tag: u8) -> char {

@@ -9,8 +9,6 @@
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_lossless)]
 
-use std::collections::BTreeSet;
-
 use super::{ignored::Ignored, DeserializeSeed, Error, Kind, Result};
 use crate::{tag::Tag, Deserialize, Sym, Visitor};
 
@@ -21,7 +19,7 @@ pub struct Deserializer<'de> {
 
     objtable: Vec<usize>,
     stack: Vec<usize>,
-    blacklisted_objects: BTreeSet<usize>,
+    is_reading_instance: bool,
 
     sym_table: Vec<&'de Sym>,
 }
@@ -135,10 +133,12 @@ impl<'de> Deserializer<'de> {
 
         Ok(Self {
             cursor,
+
             objtable: vec![],
             sym_table: vec![],
+            is_reading_instance: false,
+
             stack: vec![],
-            blacklisted_objects: BTreeSet::new(),
         })
     }
 
@@ -264,13 +264,11 @@ impl<'de> Deserializer<'de> {
         }
     }
 
-    fn is_blacklisted(&mut self, position: usize) -> bool {
-        self.blacklisted_objects.contains(&position)
-    }
-
     fn register_obj(&mut self) {
         // Only push into the object table if we are reading new input
-        if !self.stack.is_empty() || self.is_blacklisted(self.cursor.position) {
+        // also don't push if we're reading an instance (ruby moment)
+        if !self.stack.is_empty() || self.is_reading_instance {
+            self.is_reading_instance = false; // since we only want to skip reading the instance data, we can reset this here
             return;
         }
         self.objtable.push(self.cursor.position);
@@ -364,6 +362,8 @@ impl<'de, 'a> super::DeserializerTrait<'de> for &'a mut Deserializer<'de> {
             Tag::Symlink => visitor.visit_symbol(self.read_symlink()?),
             // Instance genuinely baffles me.
             Tag::Instance => {
+                self.is_reading_instance = true;
+
                 let mut len = 0;
                 let mut index = 0;
 
@@ -416,6 +416,12 @@ impl<'de, 'a> super::DeserializerTrait<'de> for &'a mut Deserializer<'de> {
                 let jump_target = self.objtable.get(index).copied().ok_or(Error {
                     kind: Kind::UnresolvedObjectlink(index),
                 })?;
+
+                if self.stack.contains(&self.cursor.position) {
+                    return Err(Error {
+                        kind: Kind::CircularReference,
+                    });
+                }
 
                 self.stack.push(self.cursor.position);
                 self.cursor.seek(jump_target);
@@ -545,6 +551,9 @@ impl<'de, 'a> super::DeserializerTrait<'de> for &'a mut Deserializer<'de> {
         V: super::traits::VisitorInstance<'de>,
     {
         if self.cursor.peek_tag()? == Tag::Instance {
+            self.register_obj(); // we need to register the object before we start reading it
+            self.is_reading_instance = true; // also need to remember NOT to push into the object table
+
             self.cursor.next_byte()?;
 
             let mut len = 0;
